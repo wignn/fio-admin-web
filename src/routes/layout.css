@@ -21,14 +21,25 @@
 }
 
 :root {
-	--bg: #ffffff;
+	--bg: #f7f9fc;
 	--surface: #ffffff;
 	--surface-2: #f0f3fa;
 	--border: #e0e3eb;
-	--border-subtle: #f0f3fa;
+	--border-subtle: #eef1f7;
 	--text-main: #131722;
 	--text-muted: #434651;
 	--text-dim: #787b86;
+}
+
+:root.dark {
+	--bg: #0f131c;
+	--surface: #171b26;
+	--surface-2: #202636;
+	--border: #2a3142;
+	--border-subtle: #1d2331;
+	--text-main: #eef2f8;
+	--text-muted: #b7becd;
+	--text-dim: #7f8798;
 }
 
 * {
@@ -41,7 +52,9 @@ html {
 
 body {
 	margin: 0;
-	background-color: var(--color-bg);
+	background:
+		radial-gradient(circle at top left, rgba(41, 98, 255, 0.08), transparent 32rem),
+		linear-gradient(180deg, var(--color-bg), var(--color-bg));
 	color: var(--color-text);
 	font-family: var(--font-sans);
 	-webkit-font-smoothing: antialiased;
@@ -56,6 +69,18 @@ select {
 
 button {
 	cursor: pointer;
+}
+
+button:disabled {
+	cursor: not-allowed;
+}
+
+input:focus,
+select:focus,
+button:focus-visible,
+a:focus-visible {
+	outline: 2px solid rgba(41, 98, 255, 0.35);
+	outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {
@@ -87,10 +112,53 @@ button {
 	}
 }
 
+@keyframes slide-in-left {
+	from {
+		opacity: 0;
+		transform: translateX(-12px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+@keyframes glow-pulse {
+	0%, 100% {
+		opacity: 0.45;
+	}
+	50% {
+		opacity: 0.9;
+	}
+}
+
 .animate-fade-in {
 	animation: fade-in 0.35s ease-out both;
 }
 
+.animate-slide-in {
+	animation: slide-in-left 0.3s ease-out both;
+}
+
 .font-mono {
 	font-family: var(--font-mono);
+}
+
+.text-gradient {
+	background: linear-gradient(135deg, var(--color-accent), #7c3aed);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
+.glass-card {
+	background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+	backdrop-filter: blur(18px);
+}
+
+.bg-grid {
+	background-image:
+		linear-gradient(to right, color-mix(in srgb, var(--color-border) 58%, transparent) 1px, transparent 1px),
+		linear-gradient(to bottom, color-mix(in srgb, var(--color-border) 58%, transparent) 1px, transparent 1px);
+	background-size: 3rem 3rem;
 }
