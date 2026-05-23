@@ -16,6 +16,8 @@ export class AdminApiError extends Error {
 interface AdminFetchOptions extends RequestInit {
 	apiKey?: string;
 	skipAuthRedirect?: boolean;
+	timeout?: number;
+	retries?: number;
 }
 
 function urlFor(path: string) {
@@ -32,24 +34,46 @@ async function parseError(response: Response) {
 }
 
 export async function adminFetch<T>(path: string, options: AdminFetchOptions = {}): Promise<T> {
-	const headers = new Headers(options.headers);
-	const key = options.apiKey ?? adminSession.apiKey;
+	const { timeout = 15_000, retries = 1, ...fetchOptions } = options;
+	const headers = new Headers(fetchOptions.headers);
+	const key = fetchOptions.apiKey ?? adminSession.apiKey;
 
 	if (key) headers.set('X-API-Key', key);
-	if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+	if (fetchOptions.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
-	let response: Response;
-	try {
-		response = await fetch(urlFor(path), {
-			...options,
-			headers
-		});
-	} catch {
-		throw new AdminApiError('Cannot reach control-plane backend.', 0);
+	let response: Response | null = null;
+	let lastStatus = 0;
+	for (let attempt = 0; attempt <= retries; attempt += 1) {
+		const controller = new AbortController();
+		const timer = setTimeout(() => controller.abort(), timeout);
+		try {
+			response = await fetch(urlFor(path), {
+				...fetchOptions,
+				headers,
+				signal: controller.signal
+			});
+			lastStatus = response.status;
+			if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === retries) break;
+		} catch (e) {
+			if (attempt === retries) {
+				if (e instanceof DOMException && e.name === 'AbortError') {
+					throw new AdminApiError('Admin request timed out.', 408);
+				}
+				throw new AdminApiError('Cannot reach control-plane backend.', 0);
+			}
+		} finally {
+			clearTimeout(timer);
+		}
 	}
 
+	if (!response) {
+		throw new AdminApiError('Cannot reach control-plane backend.', lastStatus);
+	}
+
+	adminSession.touch();
+
 	if (response.status === 401 || response.status === 403) {
-		if (!options.skipAuthRedirect) {
+		if (!fetchOptions.skipAuthRedirect) {
 			adminSession.clear(false);
 			void goto('/login');
 		}

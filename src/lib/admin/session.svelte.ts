@@ -2,6 +2,8 @@ import { goto } from '$app/navigation';
 import type { AdminIdentity } from './types';
 
 const STORAGE_KEY = 'atlsd_admin_key';
+const LAST_ACTIVE_KEY = 'atlsd_admin_last_active';
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 
 let apiKey = $state<string | null>(null);
 let identity = $state<AdminIdentity | null>(null);
@@ -29,7 +31,18 @@ export const adminSession = {
 	},
 	load() {
 		if (typeof sessionStorage === 'undefined') return;
+		const lastActive = Number(sessionStorage.getItem(LAST_ACTIVE_KEY) || 0);
+		if (lastActive && Date.now() - lastActive > SESSION_TIMEOUT_MS) {
+			this.clear(false);
+			return;
+		}
 		apiKey = sessionStorage.getItem(STORAGE_KEY);
+		if (apiKey) this.touch();
+	},
+	touch() {
+		if (typeof sessionStorage !== 'undefined') {
+			sessionStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+		}
 	},
 	set(key: string, admin: AdminIdentity) {
 		apiKey = key;
@@ -37,6 +50,7 @@ export const adminSession = {
 		ready = true;
 		if (typeof sessionStorage !== 'undefined') {
 			sessionStorage.setItem(STORAGE_KEY, key);
+			this.touch();
 		}
 	},
 	setVerifying(value: boolean) {
@@ -55,6 +69,7 @@ export const adminSession = {
 		verifying = false;
 		if (typeof sessionStorage !== 'undefined') {
 			sessionStorage.removeItem(STORAGE_KEY);
+			sessionStorage.removeItem(LAST_ACTIVE_KEY);
 		}
 		if (redirect && typeof window !== 'undefined' && window.location.pathname !== '/login') {
 			void goto('/login');
