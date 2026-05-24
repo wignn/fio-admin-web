@@ -53,6 +53,84 @@ export interface HealthStatus {
 	error?: string;
 }
 
+export interface FeedSourceStatus {
+	name: string;
+	url: string;
+	rss_url: string;
+	category: string;
+	status: 'pending' | 'ok' | 'error' | 'blocked' | string;
+	last_success_at: string | null;
+	last_error_at: string | null;
+	blocked_until: string | null;
+	next_allowed_poll_at: string | null;
+	consecutive_403: number;
+	success_count: number;
+	error_count: number;
+	forbidden_count: number;
+	parse_error_count: number;
+	last_status: number | null;
+	last_latency_ms: number | null;
+}
+
+export interface FeedSourceStatusResponse {
+	items: FeedSourceStatus[];
+	total: number;
+}
+
+export interface MarketPriceSnapshot {
+	symbol: string;
+	price: number;
+	bid: number | null;
+	ask: number | null;
+	volume: number | null;
+	source: string;
+	asset_type: string;
+	received_at: string | null;
+}
+
+export interface MarketPricesResponse {
+	items: MarketPriceSnapshot[];
+	total: number;
+}
+
+export interface ForexFeedSource {
+	id: string;
+	name: string;
+	slug: string;
+	url: string;
+	rss_url: string | null;
+	category: string;
+	poll_interval_sec: number;
+	priority: number;
+	is_active: boolean;
+	last_success_at: string | null;
+	last_error_at: string | null;
+	blocked_until: string | null;
+	success_count: number;
+	error_count: number;
+	forbidden_count: number;
+	parse_error_count: number;
+	last_status: number | null;
+	last_latency_ms: number | null;
+}
+
+export interface FeedSourcePayload {
+	name: string;
+	url: string;
+	rss_url: string;
+	category?: string;
+	poll_interval_sec?: number;
+	priority?: number;
+	is_active?: boolean;
+}
+
+export interface FeedSourceTestResult {
+	ok: boolean;
+	entries?: number;
+	latency_ms?: number;
+	error?: string;
+}
+
 export interface ApiErrorBody {
 	error?: string;
 	message?: string;

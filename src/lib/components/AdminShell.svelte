@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { BarChart3, Command, CreditCard, LogOut, Moon, Search, Server, Shield, Sparkles, Sun, Users } from 'lucide-svelte';
+	import { Activity, BarChart3, Command, CreditCard, LogOut, Moon, Search, Server, Shield, Sparkles, Sun, Users } from 'lucide-svelte';
 	import { adminSession } from '$lib/admin/session.svelte';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
@@ -13,6 +13,7 @@
 		{ href: '/', label: 'Dashboard', description: 'Overview & insights', icon: BarChart3 },
 		{ href: '/users', label: 'Users', description: 'Accounts & access', icon: Users },
 		{ href: '/plans', label: 'Plans', description: 'Limits & pricing', icon: CreditCard },
+		{ href: '/ops', label: 'Ops', description: 'Feeds & markets', icon: Activity },
 		{ href: '/system', label: 'System', description: 'Health & runtime', icon: Server }
 	];
 
