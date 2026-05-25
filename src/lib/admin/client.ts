@@ -196,6 +196,10 @@ export function fetchMarketPrices() {
 	return coreFetch<import('./types').MarketPricesResponse>('/api/v1/market/prices');
 }
 
+export function fetchMarketDataQuality() {
+	return coreFetch<import('./types').MarketDataQualityResponse>('/api/v1/market/data-quality');
+}
+
 export function fetchForexFeedSources() {
 	return coreAdminFetch<{ items: import('./types').ForexFeedSource[]; total: number }>('/api/v1/admin/forex/sources');
 }

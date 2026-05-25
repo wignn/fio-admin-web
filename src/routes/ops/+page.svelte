@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Activity, AlertTriangle, CheckCircle2, Clock, DatabaseZap, RadioTower, RefreshCw, Rss, Server, TrendingUp } from 'lucide-svelte';
-	import { fetchCoreHealth, fetchFeedSourceStatus, fetchMarketPrices } from '$lib/admin/client';
-	import type { FeedSourceStatus, HealthStatus, MarketPriceSnapshot } from '$lib/admin/types';
+	import { fetchCoreHealth, fetchFeedSourceStatus, fetchMarketDataQuality, fetchMarketPrices } from '$lib/admin/client';
+	import type { FeedSourceStatus, HealthStatus, MarketDataQualityItem, MarketPriceSnapshot } from '$lib/admin/types';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import LoadingBlock from '$lib/components/LoadingBlock.svelte';
 	import StatCard from '$lib/components/StatCard.svelte';

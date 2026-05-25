@@ -93,6 +93,25 @@ export interface MarketPricesResponse {
 	total: number;
 }
 
+export interface MarketDataQualityItem {
+	symbol: string;
+	asset_type: string;
+	latest_price: number;
+	source: string;
+	received_at: string | null;
+	age_sec: number | null;
+	ticks_5m: number;
+	ticks_1h: number;
+	unique_prices_1h: number;
+	status: 'ok' | 'flat' | 'stale' | 'quiet' | 'unknown' | string;
+}
+
+export interface MarketDataQualityResponse {
+	items: MarketDataQualityItem[];
+	total: number;
+	generated_at: string;
+}
+
 export interface ForexFeedSource {
 	id: string;
 	name: string;
