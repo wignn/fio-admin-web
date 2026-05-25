@@ -1,8 +1,31 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { Activity, AlertTriangle, CheckCircle2, Clock, DatabaseZap, RadioTower, RefreshCw, Rss, Server, TrendingUp } from 'lucide-svelte';
-	import { fetchCoreHealth, fetchFeedSourceStatus, fetchMarketDataQuality, fetchMarketPrices } from '$lib/admin/client';
-	import type { FeedSourceStatus, HealthStatus, MarketDataQualityItem, MarketPriceSnapshot } from '$lib/admin/types';
+	import {
+		Activity,
+		AlertTriangle,
+		CheckCircle2,
+		Clock,
+		DatabaseZap,
+		RadioTower,
+		RefreshCw,
+		Rss,
+		Server
+	} from 'lucide-svelte';
+	import {
+		fetchCoreHealth,
+		fetchFeedSourceStatus,
+		fetchMarketDataQuality,
+		fetchMarketPrices,
+		fetchMarketVolatilitySpikes
+	} from '$lib/admin/client';
+	import type {
+		FeedSourceStatus,
+		HealthStatus,
+		MarketDataQualityItem,
+		MarketPriceSnapshot,
+		MarketVolatilitySpike
+	} from '$lib/admin/types';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import LoadingBlock from '$lib/components/LoadingBlock.svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
@@ -13,15 +36,41 @@
 	let coreHealth = $state<HealthStatus | null>(null);
 	let feeds = $state<FeedSourceStatus[]>([]);
 	let prices = $state<MarketPriceSnapshot[]>([]);
+	let quality = $state<MarketDataQualityItem[]>([]);
+	let spikes = $state<MarketVolatilitySpike[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 	let lastLoaded = $state<Date | null>(null);
 
 	const feedOk = $derived(feeds.filter((feed) => feed.status === 'ok').length);
-	const feedAttention = $derived(feeds.filter((feed) => feed.status === 'error' || feed.status === 'blocked').length);
-	const livePrices = $derived(prices.filter((price) => freshnessFor(price).state === 'live').length);
-	const sortedFeeds = $derived([...feeds].sort((a, b) => statusRank(a.status) - statusRank(b.status) || a.name.localeCompare(b.name)));
-	const sortedPrices = $derived([...prices].sort((a, b) => symbolRank(a.symbol) - symbolRank(b.symbol) || a.symbol.localeCompare(b.symbol)));
+	const feedAttention = $derived(
+		feeds.filter((feed) => feed.status === 'error' || feed.status === 'blocked').length
+	);
+	const qualityAttention = $derived(quality.filter((item) => item.status !== 'ok').length);
+	const sortedFeeds = $derived(
+		[...feeds].sort(
+			(a, b) => statusRank(a.status) - statusRank(b.status) || a.name.localeCompare(b.name)
+		)
+	);
+	const sortedPrices = $derived(
+		[...prices].sort(
+			(a, b) => symbolRank(a.symbol) - symbolRank(b.symbol) || a.symbol.localeCompare(b.symbol)
+		)
+	);
+	const sortedQuality = $derived(
+		[...quality].sort(
+			(a, b) =>
+				qualityRank(a.status) - qualityRank(b.status) ||
+				symbolRank(a.symbol) - symbolRank(b.symbol) ||
+				a.symbol.localeCompare(b.symbol)
+		)
+	);
+	const sortedSpikes = $derived(
+		[...spikes].sort(
+			(a, b) =>
+				spikeRank(a.severity) - spikeRank(b.severity) || Math.abs(b.move_pct) - Math.abs(a.move_pct)
+		)
+	);
 
 	const primarySymbols = ['XAUUSD', 'EURUSD', 'USDJPY', 'DXY', 'SPX', 'BTCUSDT', 'ETHUSDT'];
 
@@ -37,11 +86,27 @@
 		return index === -1 ? 999 : index;
 	}
 
+	function qualityRank(status: string) {
+		if (status === 'stale') return 0;
+		if (status === 'flat') return 1;
+		if (status === 'quiet') return 2;
+		if (status === 'unknown') return 3;
+		return 4;
+	}
+
+	function spikeRank(severity: string) {
+		return severity === 'high' ? 0 : 1;
+	}
+
 	function toneForStatus(status: string): 'green' | 'amber' | 'red' | 'neutral' {
 		if (status === 'ok') return 'green';
-		if (status === 'blocked' || status === 'error') return 'red';
-		if (status === 'pending') return 'amber';
+		if (status === 'blocked' || status === 'error' || status === 'stale') return 'red';
+		if (status === 'pending' || status === 'flat' || status === 'quiet') return 'amber';
 		return 'neutral';
+	}
+
+	function toneForSpike(severity: string): 'green' | 'amber' | 'red' | 'neutral' {
+		return severity === 'high' ? 'red' : 'amber';
 	}
 
 	function formatNumber(value: number | null | undefined) {
@@ -51,7 +116,21 @@
 
 	function formatTime(value: string | null | undefined) {
 		if (!value) return '—';
-		return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+		return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(
+			new Date(value)
+		);
+	}
+
+	function formatAge(seconds: number | null | undefined) {
+		if (seconds == null) return 'unknown';
+		if (seconds < 60) return `${seconds}s`;
+		const minutes = Math.round(seconds / 60);
+		if (minutes < 60) return `${minutes}m`;
+		return `${Math.round(minutes / 60)}h`;
+	}
+
+	function formatMove(value: number) {
+		return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 	}
 
 	function relativeTime(value: string | null | undefined) {
@@ -76,7 +155,8 @@
 
 		if (type === 'crypto' || sym.endsWith('USDT')) return false;
 		if (sym === 'XAUUSD') return day === 6 || (day === 5 && hour >= 22) || (day === 0 && hour < 23);
-		if (type === 'forex' || /^[A-Z]{6}$/.test(sym)) return day === 6 || (day === 5 && hour >= 22) || (day === 0 && hour < 22);
+		if (type === 'forex' || /^[A-Z]{6}$/.test(sym))
+			return day === 6 || (day === 5 && hour >= 22) || (day === 0 && hour < 22);
 		return day === 0 || day === 6;
 	}
 
@@ -88,14 +168,23 @@
 		return 0;
 	}
 
-	function freshnessFor(price: MarketPriceSnapshot): { state: FreshnessState; label: string; tone: 'green' | 'amber' | 'red' | 'neutral' } {
-		if (!price.price || price.price <= 0) return { state: 'unknown', label: 'NO DATA', tone: 'neutral' };
+	function freshnessFor(price: MarketPriceSnapshot): {
+		state: FreshnessState;
+		label: string;
+		tone: 'green' | 'amber' | 'red' | 'neutral';
+	} {
+		if (!price.price || price.price <= 0)
+			return { state: 'unknown', label: 'NO DATA', tone: 'neutral' };
 		const ts = priceTimestamp(price);
 		if (!ts) return { state: 'unknown', label: 'NO DATA', tone: 'neutral' };
 		const ageMs = Date.now() - ts;
-		const freshMs = price.symbol.toUpperCase().endsWith('USDT') || price.asset_type === 'crypto' ? 2 * 60_000 : 5 * 60_000;
+		const freshMs =
+			price.symbol.toUpperCase().endsWith('USDT') || price.asset_type === 'crypto'
+				? 2 * 60_000
+				: 5 * 60_000;
 		if (ageMs <= freshMs) return { state: 'live', label: 'LIVE', tone: 'green' };
-		if (isMarketClosed(price.symbol, price.asset_type ?? '')) return { state: 'closed', label: 'CLOSED', tone: 'neutral' };
+		if (isMarketClosed(price.symbol, price.asset_type ?? ''))
+			return { state: 'closed', label: 'CLOSED', tone: 'neutral' };
 		return { state: 'stale', label: 'STALE', tone: 'amber' };
 	}
 
@@ -103,10 +192,18 @@
 		loading = true;
 		error = '';
 		try {
-			const [healthRes, feedRes, priceRes] = await Promise.all([fetchCoreHealth(), fetchFeedSourceStatus(), fetchMarketPrices()]);
+			const [healthRes, feedRes, priceRes, qualityRes, spikeRes] = await Promise.all([
+				fetchCoreHealth(),
+				fetchFeedSourceStatus(),
+				fetchMarketPrices(),
+				fetchMarketDataQuality(),
+				fetchMarketVolatilitySpikes('5m')
+			]);
 			coreHealth = healthRes;
 			feeds = feedRes.items;
 			prices = priceRes.items;
+			quality = qualityRes.items;
+			spikes = spikeRes.items;
 			lastLoaded = new Date();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load ops dashboard.';
@@ -120,23 +217,39 @@
 	});
 </script>
 
-<div class="space-y-6 animate-fade-in">
-	<div class="relative overflow-hidden rounded-3xl border border-border bg-surface p-6 shadow-sm md:p-8">
-		<div class="absolute inset-0 bg-grid opacity-40"></div>
-		<div class="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-accent/10 blur-3xl"></div>
+<div class="animate-fade-in space-y-6">
+	<div
+		class="relative overflow-hidden rounded-3xl border border-border bg-surface p-6 shadow-sm md:p-8"
+	>
+		<div class="bg-grid absolute inset-0 opacity-40"></div>
+		<div class="absolute -top-16 -right-16 h-56 w-56 rounded-full bg-accent/10 blur-3xl"></div>
 		<div class="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
 			<div>
-				<div class="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-xs font-bold text-accent">
+				<div
+					class="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-xs font-bold text-accent"
+				>
 					<RadioTower class="h-3.5 w-3.5" /> Live operations
 				</div>
-				<h1 class="mt-4 text-4xl font-black tracking-tight text-text md:text-5xl">Operations Center</h1>
-				<p class="mt-3 max-w-2xl text-sm leading-relaxed text-text-muted">Monitor feed health, core readiness, and live market data freshness from one operational console.</p>
+				<h1 class="mt-4 text-4xl font-black tracking-tight text-text md:text-5xl">
+					Operations Center
+				</h1>
+				<p class="mt-3 max-w-2xl text-sm leading-relaxed text-text-muted">
+					Monitor feed health, core readiness, and live market data freshness from one operational
+					console.
+				</p>
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
 				{#if lastLoaded}
-					<span class="rounded-full border border-border bg-surface/80 px-3 py-2 text-xs font-semibold text-text-muted">Updated {lastLoaded.toLocaleTimeString('id-ID')}</span>
+					<span
+						class="rounded-full border border-border bg-surface/80 px-3 py-2 text-xs font-semibold text-text-muted"
+						>Updated {lastLoaded.toLocaleTimeString('id-ID')}</span
+					>
 				{/if}
-				<button class="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2 text-sm font-bold text-white shadow-lg shadow-accent/20 transition hover:bg-accent-glow disabled:opacity-60" onclick={load} disabled={loading}>
+				<button
+					class="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2 text-sm font-bold text-white shadow-lg shadow-accent/20 transition hover:bg-accent-glow disabled:opacity-60"
+					onclick={load}
+					disabled={loading}
+				>
 					<RefreshCw class="h-4 w-4 {loading ? 'animate-spin' : ''}" />
 					{loading ? 'Refreshing...' : 'Refresh ops'}
 				</button>
@@ -150,10 +263,38 @@
 		<EmptyState title="Operations unavailable" description={error} />
 	{:else}
 		<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-			<StatCard label="Core health" value={coreHealth?.status === 'healthy' ? 'Healthy' : 'Attention'} help={coreHealth?.latency_ms ? `${coreHealth.latency_ms}ms latency` : 'REST health probe'} trend={coreHealth?.status ?? 'unknown'} icon={Server} tone={coreHealth?.status === 'healthy' ? 'green' : 'red'} />
-			<StatCard label="Feed health" value={`${feedOk}/${feeds.length}`} help="RSS sources reporting ok" trend={feedAttention > 0 ? `${feedAttention} attention` : 'All clear'} icon={Rss} tone={feedAttention > 0 ? 'amber' : 'green'} />
-			<StatCard label="Market symbols" value={prices.length} help={`${livePrices} live right now`} trend="REST snapshot" icon={TrendingUp} tone={livePrices > 0 ? 'green' : 'amber'} />
-			<StatCard label="Blocked/error feeds" value={feedAttention} help="Circuit breaker or fetch failures" trend={feedAttention === 0 ? 'None' : 'Review'} icon={AlertTriangle} tone={feedAttention === 0 ? 'green' : 'red'} />
+			<StatCard
+				label="Core health"
+				value={coreHealth?.status === 'healthy' ? 'Healthy' : 'Attention'}
+				help={coreHealth?.latency_ms ? `${coreHealth.latency_ms}ms latency` : 'REST health probe'}
+				trend={coreHealth?.status ?? 'unknown'}
+				icon={Server}
+				tone={coreHealth?.status === 'healthy' ? 'green' : 'red'}
+			/>
+			<StatCard
+				label="Feed health"
+				value={`${feedOk}/${feeds.length}`}
+				help="RSS sources reporting ok"
+				trend={feedAttention > 0 ? `${feedAttention} attention` : 'All clear'}
+				icon={Rss}
+				tone={feedAttention > 0 ? 'amber' : 'green'}
+			/>
+			<StatCard
+				label="Market quality"
+				value={`${quality.length - qualityAttention}/${quality.length}`}
+				help="Symbols with healthy tick flow"
+				trend={qualityAttention > 0 ? `${qualityAttention} attention` : 'All clear'}
+				icon={DatabaseZap}
+				tone={qualityAttention > 0 ? 'amber' : 'green'}
+			/>
+			<StatCard
+				label="Volatility spikes"
+				value={spikes.length}
+				help="5m threshold breaches"
+				trend={spikes.length > 0 ? 'Active' : 'None'}
+				icon={AlertTriangle}
+				tone={spikes.length > 0 ? 'red' : 'green'}
+			/>
 		</div>
 
 		<div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -161,18 +302,29 @@
 				<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 					<div>
 						<h2 class="text-xl font-black text-text">Feed Health Center</h2>
-						<p class="mt-1 text-sm text-text-muted">Runtime RSS source state from the core collector.</p>
+						<p class="mt-1 text-sm text-text-muted">
+							Runtime RSS source state from the core collector.
+						</p>
 					</div>
 					<div class="flex flex-wrap items-center gap-2">
-						<a href="/ops/feeds" class="rounded-xl border border-border px-3 py-2 text-xs font-bold text-text-muted transition hover:bg-surface-2 hover:text-text">Manage sources</a>
-						<StatusBadge tone={feedAttention === 0 ? 'green' : 'amber'} label={`${feedOk}/${feeds.length} ok`} />
+						<a
+							href={resolve('/ops/feeds')}
+							class="rounded-xl border border-border px-3 py-2 text-xs font-bold text-text-muted transition hover:bg-surface-2 hover:text-text"
+							>Manage sources</a
+						>
+						<StatusBadge
+							tone={feedAttention === 0 ? 'green' : 'amber'}
+							label={`${feedOk}/${feeds.length} ok`}
+						/>
 					</div>
 				</div>
 
 				<div class="mt-5 overflow-hidden rounded-2xl border border-border">
 					<div class="overflow-x-auto">
 						<table class="min-w-full divide-y divide-border text-sm">
-							<thead class="bg-surface-2/70 text-left text-xs font-bold uppercase tracking-wide text-text-dim">
+							<thead
+								class="bg-surface-2/70 text-left text-xs font-bold tracking-wide text-text-dim uppercase"
+							>
 								<tr>
 									<th class="px-4 py-3">Source</th>
 									<th class="px-4 py-3">Status</th>
@@ -183,17 +335,35 @@
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-border">
-								{#each sortedFeeds as feed}
+								{#each sortedFeeds as feed (feed.name)}
 									<tr class="bg-surface hover:bg-surface-2/50">
 										<td class="px-4 py-3">
 											<p class="font-bold text-text">{feed.name}</p>
 											<p class="mt-1 text-xs text-text-dim">{feed.category}</p>
 										</td>
-										<td class="px-4 py-3"><StatusBadge tone={toneForStatus(feed.status)} label={feed.status} /></td>
-										<td class="px-4 py-3 font-mono text-xs text-text-muted">{feed.last_status ?? '—'} · {feed.last_latency_ms ? `${feed.last_latency_ms}ms` : '—'}</td>
-										<td class="px-4 py-3 font-mono text-xs text-text-muted">{feed.success_count}/{feed.error_count} · 403:{feed.forbidden_count} · parse:{feed.parse_error_count}</td>
-										<td class="px-4 py-3 text-xs text-text-muted" title={formatTime(feed.last_success_at)}>{relativeTime(feed.last_success_at)}</td>
-										<td class="px-4 py-3 text-xs text-text-muted" title={formatTime(feed.blocked_until ?? feed.next_allowed_poll_at)}>{feed.blocked_until ? `blocked ${relativeTime(feed.blocked_until)}` : relativeTime(feed.next_allowed_poll_at)}</td>
+										<td class="px-4 py-3"
+											><StatusBadge tone={toneForStatus(feed.status)} label={feed.status} /></td
+										>
+										<td class="px-4 py-3 font-mono text-xs text-text-muted"
+											>{feed.last_status ?? '—'} · {feed.last_latency_ms
+												? `${feed.last_latency_ms}ms`
+												: '—'}</td
+										>
+										<td class="px-4 py-3 font-mono text-xs text-text-muted"
+											>{feed.success_count}/{feed.error_count} · 403:{feed.forbidden_count} · parse:{feed.parse_error_count}</td
+										>
+										<td
+											class="px-4 py-3 text-xs text-text-muted"
+											title={formatTime(feed.last_success_at)}
+											>{relativeTime(feed.last_success_at)}</td
+										>
+										<td
+											class="px-4 py-3 text-xs text-text-muted"
+											title={formatTime(feed.blocked_until ?? feed.next_allowed_poll_at)}
+											>{feed.blocked_until
+												? `blocked ${relativeTime(feed.blocked_until)}`
+												: relativeTime(feed.next_allowed_poll_at)}</td
+										>
 									</tr>
 								{/each}
 							</tbody>
@@ -206,13 +376,15 @@
 				<div class="flex items-start justify-between gap-3">
 					<div>
 						<h2 class="text-xl font-black text-text">Market Data Monitor</h2>
-						<p class="mt-1 text-sm text-text-muted">Latest market cache snapshot and freshness classification.</p>
+						<p class="mt-1 text-sm text-text-muted">
+							Latest market cache snapshot and freshness classification.
+						</p>
 					</div>
 					<DatabaseZap class="h-5 w-5 text-accent" />
 				</div>
 
 				<div class="mt-5 space-y-3">
-					{#each sortedPrices as price}
+					{#each sortedPrices as price (price.symbol)}
 						{@const freshness = freshnessFor(price)}
 						<div class="rounded-2xl border border-border bg-surface-2/45 p-4">
 							<div class="flex items-start justify-between gap-3">
@@ -221,30 +393,147 @@
 										<p class="font-mono text-sm font-black text-text">{price.symbol}</p>
 										<StatusBadge tone={freshness.tone} label={freshness.label} />
 									</div>
-									<p class="mt-1 text-xs uppercase tracking-wide text-text-dim">{price.asset_type || 'unknown'} · {price.source || 'market_data'}</p>
+									<p class="mt-1 text-xs tracking-wide text-text-dim uppercase">
+										{price.asset_type || 'unknown'} · {price.source || 'market_data'}
+									</p>
 								</div>
 								<p class="font-mono text-base font-black text-text">{formatNumber(price.price)}</p>
 							</div>
 							<div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-text-muted">
-								<span><Clock class="mr-1 inline h-3.5 w-3.5" />{relativeTime(price.received_at)}</span>
+								<span
+									><Clock class="mr-1 inline h-3.5 w-3.5" />{relativeTime(price.received_at)}</span
+								>
 								<span>bid {formatNumber(price.bid)}</span>
 								<span>ask {formatNumber(price.ask)}</span>
 							</div>
 						</div>
 					{/each}
 					{#if prices.length === 0}
-						<div class="rounded-2xl border border-border bg-surface-2/50 p-6 text-center text-sm font-semibold text-text-muted">No market prices in the current snapshot.</div>
+						<div
+							class="rounded-2xl border border-border bg-surface-2/50 p-6 text-center text-sm font-semibold text-text-muted"
+						>
+							No market prices in the current snapshot.
+						</div>
 					{/if}
 				</div>
 			</section>
 		</div>
 
 		<section class="rounded-3xl border border-border bg-surface p-5 shadow-sm">
+			<h2 class="text-xl font-black text-text">Market Data Quality</h2>
+			<div class="mt-4 rounded-2xl border border-border bg-surface-2/45 p-4">
+				<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+					{#each sortedQuality as item (item.symbol)}
+						<div class="rounded-2xl border border-border bg-surface p-4">
+							<div class="flex items-start justify-between gap-3">
+								<div>
+									<p class="font-mono text-sm font-black text-text">{item.symbol}</p>
+									<p class="mt-1 text-xs tracking-wide text-text-dim uppercase">
+										{item.asset_type || 'unknown'} · {item.source || 'market_data'}
+									</p>
+								</div>
+								<StatusBadge tone={toneForStatus(item.status)} label={item.status} />
+							</div>
+							<div class="mt-3 grid grid-cols-2 gap-2 text-xs text-text-muted">
+								<span>age <b class="font-mono text-text">{formatAge(item.age_sec)}</b></span>
+								<span>ticks 5m <b class="font-mono text-text">{item.ticks_5m}</b></span>
+								<span>ticks 1h <b class="font-mono text-text">{item.ticks_1h}</b></span>
+								<span>unique <b class="font-mono text-text">{item.unique_prices_1h}</b></span>
+							</div>
+							<p class="mt-3 font-mono text-sm font-bold text-text">
+								{formatNumber(item.latest_price)}
+							</p>
+						</div>
+					{/each}
+				</div>
+				{#if quality.length === 0}
+					<div
+						class="rounded-2xl border border-border bg-surface p-6 text-center text-sm font-semibold text-text-muted"
+					>
+						No market quality rows are available yet.
+					</div>
+				{/if}
+			</div>
+		</section>
+
+		<section class="rounded-3xl border border-border bg-surface p-5 shadow-sm">
+			<h2 class="text-xl font-black text-text">Volatility Spikes</h2>
+			<div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+				{#each sortedSpikes as spike (`${spike.symbol}-${spike.window}`)}
+					<div class="rounded-2xl border border-border bg-surface-2/45 p-4">
+						<div class="flex items-start justify-between gap-3">
+							<div>
+								<p class="font-mono text-sm font-black text-text">{spike.symbol}</p>
+								<p class="mt-1 text-xs tracking-wide text-text-dim uppercase">
+									{spike.asset_type || 'unknown'} · {spike.direction}
+								</p>
+							</div>
+							<StatusBadge tone={toneForSpike(spike.severity)} label={spike.severity} />
+						</div>
+						<p
+							class="mt-3 font-mono text-lg font-black {spike.direction === 'up'
+								? 'text-green'
+								: 'text-red'}"
+						>
+							{formatMove(spike.move_pct)}
+						</p>
+						<div class="mt-3 grid grid-cols-2 gap-2 text-xs text-text-muted">
+							<span
+								>latest <b class="font-mono text-text">{formatNumber(spike.latest_price)}</b></span
+							>
+							<span
+								>baseline <b class="font-mono text-text">{formatNumber(spike.baseline_price)}</b
+								></span
+							>
+							<span>ticks <b class="font-mono text-text">{spike.tick_count}</b></span>
+							<span
+								>threshold <b class="font-mono text-text">{spike.threshold_pct.toFixed(2)}%</b
+								></span
+							>
+						</div>
+						<p class="mt-3 text-xs text-text-muted" title={formatTime(spike.latest_at)}>
+							seen {relativeTime(spike.latest_at)}
+						</p>
+					</div>
+				{/each}
+				{#if spikes.length === 0}
+					<div
+						class="rounded-2xl border border-border bg-surface-2/50 p-6 text-center md:col-span-2 xl:col-span-3"
+					>
+						<CheckCircle2 class="mx-auto h-5 w-5 text-green" />
+						<p class="mt-3 text-sm font-bold text-text">No active volatility spikes</p>
+						<p class="mt-1 text-xs text-text-muted">
+							No symbol is currently breaching the 5-minute movement threshold.
+						</p>
+					</div>
+				{/if}
+			</div>
+		</section>
+
+		<section class="rounded-3xl border border-border bg-surface p-5 shadow-sm">
 			<h2 class="text-xl font-black text-text">Operational notes</h2>
 			<div class="mt-4 grid gap-3 md:grid-cols-3">
-				<div class="rounded-2xl border border-border bg-surface-2/50 p-4"><CheckCircle2 class="h-4 w-4 text-green" /><p class="mt-3 text-sm font-bold text-text">Read-only v1</p><p class="mt-1 text-xs text-text-muted">This dashboard observes core state but does not trigger pipeline actions.</p></div>
-				<div class="rounded-2xl border border-border bg-surface-2/50 p-4"><Activity class="h-4 w-4 text-accent" /><p class="mt-3 text-sm font-bold text-text">Client freshness</p><p class="mt-1 text-xs text-text-muted">Market labels use deterministic UTC session rules for v1.</p></div>
-				<div class="rounded-2xl border border-border bg-surface-2/50 p-4"><AlertTriangle class="h-4 w-4 text-amber" /><p class="mt-3 text-sm font-bold text-text">Feed state resets</p><p class="mt-1 text-xs text-text-muted">RSS source counters are runtime memory and reset when core restarts.</p></div>
+				<div class="rounded-2xl border border-border bg-surface-2/50 p-4">
+					<CheckCircle2 class="h-4 w-4 text-green" />
+					<p class="mt-3 text-sm font-bold text-text">Read-only v1</p>
+					<p class="mt-1 text-xs text-text-muted">
+						This dashboard observes core state but does not trigger pipeline actions.
+					</p>
+				</div>
+				<div class="rounded-2xl border border-border bg-surface-2/50 p-4">
+					<Activity class="h-4 w-4 text-accent" />
+					<p class="mt-3 text-sm font-bold text-text">Client freshness</p>
+					<p class="mt-1 text-xs text-text-muted">
+						Market labels use deterministic UTC session rules for v1.
+					</p>
+				</div>
+				<div class="rounded-2xl border border-border bg-surface-2/50 p-4">
+					<AlertTriangle class="h-4 w-4 text-amber" />
+					<p class="mt-3 text-sm font-bold text-text">Feed state resets</p>
+					<p class="mt-1 text-xs text-text-muted">
+						RSS source counters are runtime memory and reset when core restarts.
+					</p>
+				</div>
 			</div>
 		</section>
 	{/if}

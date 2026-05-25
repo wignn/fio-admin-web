@@ -1,4 +1,5 @@
 import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
 import { CONTROL_PLANE_URL, CORE_REST_URL } from '$lib/config';
 import { adminSession } from './session.svelte';
 import type { AdminIdentity, ApiErrorBody, PlanId } from './types';
@@ -37,7 +38,10 @@ async function parseError(response: Response) {
 	}
 }
 
-async function coreFetch<T>(path: string, options: RequestInit & { timeout?: number } = {}): Promise<T> {
+async function coreFetch<T>(
+	path: string,
+	options: RequestInit & { timeout?: number } = {}
+): Promise<T> {
 	const { timeout = 12_000, ...fetchOptions } = options;
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeout);
@@ -46,11 +50,13 @@ async function coreFetch<T>(path: string, options: RequestInit & { timeout?: num
 			...fetchOptions,
 			signal: controller.signal
 		});
-		if (!response.ok) throw new AdminApiError(`${response.status} ${response.statusText}`, response.status);
+		if (!response.ok)
+			throw new AdminApiError(`${response.status} ${response.statusText}`, response.status);
 		return (await response.json()) as T;
 	} catch (e) {
 		if (e instanceof AdminApiError) throw e;
-		if (e instanceof DOMException && e.name === 'AbortError') throw new AdminApiError('Core request timed out.', 408);
+		if (e instanceof DOMException && e.name === 'AbortError')
+			throw new AdminApiError('Core request timed out.', 408);
 		throw new AdminApiError('Cannot reach core backend.', 0);
 	} finally {
 		clearTimeout(timer);
@@ -63,7 +69,8 @@ export async function adminFetch<T>(path: string, options: AdminFetchOptions = {
 	const key = fetchOptions.apiKey ?? adminSession.apiKey;
 
 	if (key) headers.set('X-API-Key', key);
-	if (fetchOptions.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+	if (fetchOptions.body && !headers.has('Content-Type'))
+		headers.set('Content-Type', 'application/json');
 
 	let response: Response | null = null;
 	let lastStatus = 0;
@@ -99,7 +106,7 @@ export async function adminFetch<T>(path: string, options: AdminFetchOptions = {
 	if (response.status === 401 || response.status === 403) {
 		if (!fetchOptions.skipAuthRedirect) {
 			adminSession.clear(false);
-			void goto('/login');
+			void goto(resolve('/login'));
 		}
 		throw new AdminApiError('Admin key is invalid or not authorized.', response.status);
 	}
@@ -153,7 +160,12 @@ export async function verifyStoredSession() {
 }
 
 export function fetchStats() {
-	return adminFetch<{ total_users: number; active_users: number; total_api_keys: number; users_by_plan: Record<string, number> }>('/api/v1/admin/stats');
+	return adminFetch<{
+		total_users: number;
+		active_users: number;
+		total_api_keys: number;
+		users_by_plan: Record<string, number>;
+	}>('/api/v1/admin/stats');
 }
 
 export function fetchUsers() {
@@ -172,12 +184,18 @@ export function updateUserPlan(userId: string, plan: PlanId | string) {
 }
 
 export function toggleUser(userId: string) {
-	return adminFetch<{ message: string; is_active: boolean }>(`/api/v1/admin/users/${userId}/toggle`, {
-		method: 'POST'
-	});
+	return adminFetch<{ message: string; is_active: boolean }>(
+		`/api/v1/admin/users/${userId}/toggle`,
+		{
+			method: 'POST'
+		}
+	);
 }
 
-async function coreAdminFetch<T>(path: string, options: RequestInit & { timeout?: number } = {}): Promise<T> {
+async function coreAdminFetch<T>(
+	path: string,
+	options: RequestInit & { timeout?: number } = {}
+): Promise<T> {
 	const headers = new Headers(options.headers);
 	if (adminSession.apiKey) headers.set('X-API-Key', adminSession.apiKey);
 	if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
@@ -200,15 +218,26 @@ export function fetchMarketDataQuality() {
 	return coreFetch<import('./types').MarketDataQualityResponse>('/api/v1/market/data-quality');
 }
 
+export function fetchMarketVolatilitySpikes(window = '5m') {
+	return coreFetch<import('./types').MarketVolatilitySpikesResponse>(
+		`/api/v1/market/spikes?window=${encodeURIComponent(window)}`
+	);
+}
+
 export function fetchForexFeedSources() {
-	return coreAdminFetch<{ items: import('./types').ForexFeedSource[]; total: number }>('/api/v1/admin/forex/sources');
+	return coreAdminFetch<{ items: import('./types').ForexFeedSource[]; total: number }>(
+		'/api/v1/admin/forex/sources'
+	);
 }
 
 export function createForexFeedSource(payload: import('./types').FeedSourcePayload) {
-	return coreAdminFetch<{ id?: string; message?: string; error?: string }>('/api/v1/admin/forex/sources', {
-		method: 'POST',
-		body: JSON.stringify(payload)
-	});
+	return coreAdminFetch<{ id?: string; message?: string; error?: string }>(
+		'/api/v1/admin/forex/sources',
+		{
+			method: 'POST',
+			body: JSON.stringify(payload)
+		}
+	);
 }
 
 export function updateForexFeedSource(id: string, payload: import('./types').FeedSourcePayload) {
@@ -219,15 +248,21 @@ export function updateForexFeedSource(id: string, payload: import('./types').Fee
 }
 
 export function toggleForexFeedSource(id: string) {
-	return coreAdminFetch<{ message?: string; is_active?: boolean; error?: string }>(`/api/v1/admin/forex/sources/${id}/toggle`, {
-		method: 'POST'
-	});
+	return coreAdminFetch<{ message?: string; is_active?: boolean; error?: string }>(
+		`/api/v1/admin/forex/sources/${id}/toggle`,
+		{
+			method: 'POST'
+		}
+	);
 }
 
 export function testForexFeedSource(payload: import('./types').FeedSourcePayload) {
-	return coreAdminFetch<import('./types').FeedSourceTestResult>('/api/v1/admin/forex/sources/test', {
-		method: 'POST',
-		body: JSON.stringify(payload),
-		timeout: 20_000
-	});
+	return coreAdminFetch<import('./types').FeedSourceTestResult>(
+		'/api/v1/admin/forex/sources/test',
+		{
+			method: 'POST',
+			body: JSON.stringify(payload),
+			timeout: 20_000
+		}
+	);
 }

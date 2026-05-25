@@ -112,6 +112,27 @@ export interface MarketDataQualityResponse {
 	generated_at: string;
 }
 
+export interface MarketVolatilitySpike {
+	symbol: string;
+	asset_type: string;
+	window: string;
+	latest_price: number;
+	baseline_price: number;
+	move_pct: number;
+	direction: 'up' | 'down' | string;
+	severity: 'medium' | 'high' | string;
+	threshold_pct: number;
+	tick_count: number;
+	latest_at: string;
+}
+
+export interface MarketVolatilitySpikesResponse {
+	items: MarketVolatilitySpike[];
+	total: number;
+	window: string;
+	generated_at: string;
+}
+
 export interface ForexFeedSource {
 	id: string;
 	name: string;
