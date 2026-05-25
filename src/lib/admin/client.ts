@@ -224,6 +224,12 @@ export function fetchMarketVolatilitySpikes(window = '5m') {
 	);
 }
 
+export function fetchWhyDidItMove(symbol: string, window = '5m') {
+	return coreFetch<import('./types').WhyMoveResponse>(
+		`/api/v1/market/why/${encodeURIComponent(symbol)}?window=${encodeURIComponent(window)}`
+	);
+}
+
 export function fetchForexFeedSources() {
 	return coreAdminFetch<{ items: import('./types').ForexFeedSource[]; total: number }>(
 		'/api/v1/admin/forex/sources'

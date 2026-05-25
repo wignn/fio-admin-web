@@ -133,6 +133,67 @@ export interface MarketVolatilitySpikesResponse {
 	generated_at: string;
 }
 
+export interface WhyMoveCause {
+	kind: string;
+	title: string;
+	summary: string | null;
+	source_name: string | null;
+	url: string | null;
+	published_at: string | null;
+	processed_at: string | null;
+	sentiment: string | null;
+	impact_level: string | null;
+	matched_terms: string[];
+	score: number;
+	reason: string;
+}
+
+export interface WhyMoveNarrative {
+	headline: string;
+	explanation: string;
+	drivers: string[];
+	confidence: string;
+	caveats: string[];
+}
+
+export interface WhyMoveDriver {
+	name: string;
+	score: number;
+	evidence: string[];
+}
+
+export interface WhyMoveConfidence {
+	label: string;
+	score: number;
+	breakdown: Record<string, number>;
+}
+
+export interface WhyMoveResponse {
+	symbol: string;
+	window: string;
+	lookback_minutes?: number;
+	move: (Partial<MarketVolatilitySpike> & { is_active_spike?: boolean }) | null;
+	headline?: string;
+	explanation?: string;
+	summary?: string;
+	confidence: WhyMoveConfidence | string;
+	matched_terms?: string[];
+	drivers: WhyMoveDriver[] | string[];
+	news_clusters?: Array<{ theme: string; score: number; sentiment: string; headlines: string[] }>;
+	cross_assets: Array<Partial<MarketVolatilitySpike> & { relationship: string }>;
+	causes: { news: WhyMoveCause[]; calendar: unknown[] };
+	llm: {
+		provider: string;
+		model: string | null;
+		status: string;
+		narrative: WhyMoveNarrative | null;
+	};
+	engine?: { status: string; version: string };
+	cache?: { status: string; evidence_hash?: string };
+	evidence?: unknown;
+	generated_at: string;
+}
+
 export interface ForexFeedSource {
 	id: string;
 	name: string;
