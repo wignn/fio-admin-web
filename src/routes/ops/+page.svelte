@@ -146,20 +146,6 @@
 		return `${days}d ${diffMs >= 0 ? 'ago' : 'from now'}`;
 	}
 
-	function isMarketClosed(symbol: string, assetType: string) {
-		const now = new Date();
-		const day = now.getUTCDay();
-		const hour = now.getUTCHours();
-		const sym = symbol.toUpperCase();
-		const type = assetType.toLowerCase();
-
-		if (type === 'crypto' || sym.endsWith('USDT')) return false;
-		if (sym === 'XAUUSD') return day === 6 || (day === 5 && hour >= 22) || (day === 0 && hour < 23);
-		if (type === 'forex' || /^[A-Z]{6}$/.test(sym))
-			return day === 6 || (day === 5 && hour >= 22) || (day === 0 && hour < 22);
-		return day === 0 || day === 6;
-	}
-
 	function priceTimestamp(price: MarketPriceSnapshot) {
 		if (price.received_at) {
 			const parsed = Date.parse(price.received_at);
@@ -177,12 +163,14 @@
 			return { state: 'unknown', label: 'NO DATA', tone: 'neutral' };
 		const ts = priceTimestamp(price);
 		if (!ts) return { state: 'unknown', label: 'NO DATA', tone: 'neutral' };
+		const session = price.session;
 		const ageMs = Date.now() - ts;
 		const isCrypto = price.symbol.toUpperCase().endsWith('USDT') || price.asset_type === 'crypto';
 		const freshMs = isCrypto ? 15 * 60_000 : 5 * 60_000;
+		if (session?.is_open && ageMs <= freshMs) return { state: 'live', label: 'LIVE', tone: 'green' };
+		if (session && !session.is_open)
+			return { state: 'closed', label: session.state === 'break' ? 'BREAK' : 'CLOSED', tone: 'neutral' };
 		if (ageMs <= freshMs) return { state: 'live', label: 'LIVE', tone: 'green' };
-		if (isMarketClosed(price.symbol, price.asset_type ?? ''))
-			return { state: 'closed', label: 'CLOSED', tone: 'neutral' };
 		return { state: 'stale', label: isCrypto ? 'FEED LAG' : 'STALE', tone: 'amber' };
 	}
 
@@ -522,7 +510,7 @@
 					<Activity class="h-4 w-4 text-accent" />
 					<p class="mt-3 text-sm font-bold text-text">Client freshness</p>
 					<p class="mt-1 text-xs text-text-muted">
-						Market labels use deterministic UTC session rules for v1.
+						Market labels use the session state returned by the core market API.
 					</p>
 				</div>
 				<div class="rounded-2xl border border-border bg-surface-2/50 p-4">

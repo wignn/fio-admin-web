@@ -86,6 +86,13 @@ export interface MarketPriceSnapshot {
 	source: string;
 	asset_type: string;
 	received_at: string | null;
+	session?: {
+		exchange: string;
+		timezone: string;
+		state: 'open' | 'closed' | 'break' | 'unknown' | string;
+		is_open: boolean;
+		reason: string;
+	};
 }
 
 export interface MarketPricesResponse {
