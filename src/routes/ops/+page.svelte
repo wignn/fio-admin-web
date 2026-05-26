@@ -178,14 +178,12 @@
 		const ts = priceTimestamp(price);
 		if (!ts) return { state: 'unknown', label: 'NO DATA', tone: 'neutral' };
 		const ageMs = Date.now() - ts;
-		const freshMs =
-			price.symbol.toUpperCase().endsWith('USDT') || price.asset_type === 'crypto'
-				? 2 * 60_000
-				: 5 * 60_000;
+		const isCrypto = price.symbol.toUpperCase().endsWith('USDT') || price.asset_type === 'crypto';
+		const freshMs = isCrypto ? 15 * 60_000 : 5 * 60_000;
 		if (ageMs <= freshMs) return { state: 'live', label: 'LIVE', tone: 'green' };
 		if (isMarketClosed(price.symbol, price.asset_type ?? ''))
 			return { state: 'closed', label: 'CLOSED', tone: 'neutral' };
-		return { state: 'stale', label: 'STALE', tone: 'amber' };
+		return { state: 'stale', label: isCrypto ? 'FEED LAG' : 'STALE', tone: 'amber' };
 	}
 
 	async function load() {

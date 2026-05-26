@@ -93,8 +93,8 @@
 	});
 </script>
 
-<div class="space-y-6 animate-fade-in">
-	<div class="relative overflow-hidden rounded-3xl border border-border bg-surface p-6 shadow-sm md:p-8">
+<div class="animate-fade-in space-y-5">
+	<div class="relative overflow-hidden rounded-3xl border border-border bg-surface p-5 shadow-sm md:p-6">
 		<div class="absolute inset-0 bg-grid opacity-40"></div>
 		<div class="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-accent/10 blur-3xl"></div>
 		<div class="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -102,7 +102,7 @@
 				<div class="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-xs font-bold text-accent">
 					<ShieldCheck class="h-3.5 w-3.5" /> Production command center
 				</div>
-				<h1 class="mt-4 text-4xl font-black tracking-tight text-text md:text-5xl">Admin Dashboard</h1>
+				<h1 class="mt-4 text-3xl font-black tracking-tight text-text md:text-4xl">Admin Dashboard</h1>
 				<p class="mt-3 max-w-2xl text-sm leading-relaxed text-text-muted">Monitor revenue, users, access risk, plan adoption, and service readiness from one clean operational view.</p>
 			</div>
 			<div class="flex flex-wrap items-center gap-2">

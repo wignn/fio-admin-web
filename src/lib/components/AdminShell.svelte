@@ -2,20 +2,44 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { Activity, BarChart3, Command, CreditCard, LogOut, Moon, Search, Server, Shield, Sparkles, Sun, Users } from 'lucide-svelte';
+	import { Activity, BarChart3, Command, CreditCard, FileSearch, Gauge, LogOut, Moon, RadioTower, Search, Server, Shield, Sparkles, Sun, Users } from 'lucide-svelte';
 	import { adminSession } from '$lib/admin/session.svelte';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
 	let isDarkTheme = $state(false);
 
-	const nav = [
-		{ href: '/', label: 'Dashboard', description: 'Overview & insights', icon: BarChart3 },
-		{ href: '/users', label: 'Users', description: 'Accounts & access', icon: Users },
-		{ href: '/plans', label: 'Plans', description: 'Limits & pricing', icon: CreditCard },
-		{ href: '/ops', label: 'Ops', description: 'Feeds & markets', icon: Activity },
-		{ href: '/system', label: 'System', description: 'Health & runtime', icon: Server }
+	const navGroups = [
+		{
+			label: 'Command',
+			items: [{ href: '/', label: 'Dashboard', description: 'Overview & insights', icon: BarChart3 }]
+		},
+		{
+			label: 'Business',
+			items: [
+				{ href: '/users', label: 'Users', description: 'Accounts & access', icon: Users },
+				{ href: '/plans', label: 'Plans', description: 'Limits & pricing', icon: CreditCard }
+			]
+		},
+		{
+			label: 'Operations',
+			items: [
+				{ href: '/ops', label: 'Ops Center', description: 'Feeds & markets', icon: Activity },
+				{ href: '/system', label: 'System', description: 'Health & runtime', icon: Server }
+			]
+		}
 	];
+
+	const opsQuickLinks = [
+		{ href: '/ops/feeds', label: 'Feed Health', icon: RadioTower },
+		{ href: '/ops', label: 'Market Quality', icon: Gauge },
+		{ href: '/ops/why', label: 'Why Engine', icon: FileSearch }
+	];
+
+	function isActive(href: string) {
+		if (href === '/') return page.url.pathname === '/';
+		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
+	}
 
 	onMount(() => {
 		const storedTheme = localStorage.getItem('admin-theme');
@@ -81,41 +105,63 @@
 		</div>
 	</header>
 
-	<div class="mx-auto grid max-w-[1500px] grid-cols-1 lg:grid-cols-[280px_1fr]">
-		<aside class="border-b border-border bg-surface/70 lg:min-h-[calc(100vh-64px)] lg:border-b-0 lg:border-r lg:bg-transparent">
-			<div class="sticky top-16 p-3 lg:p-5">
-				<div class="mb-4 hidden rounded-2xl border border-border bg-surface p-4 shadow-sm lg:block">
-					<p class="text-xs font-bold uppercase tracking-wide text-text-dim">Workspace</p>
-					<p class="mt-2 text-sm font-bold text-text">Production Admin</p>
-					<div class="mt-3 flex items-center gap-2 text-xs text-text-muted">
-						<span class="h-2 w-2 rounded-full bg-green"></span>
-						Ready for operations
+			<div class="mx-auto grid max-w-[1540px] grid-cols-1 lg:grid-cols-[260px_1fr]">
+			<aside class="border-b border-border bg-surface/80 lg:min-h-[calc(100vh-64px)] lg:border-b-0 lg:border-r lg:bg-surface/35">
+				<div class="sticky top-16 p-3 lg:p-4">
+					<div class="mb-4 hidden overflow-hidden rounded-2xl border border-border bg-surface p-4 shadow-sm lg:block">
+						<p class="font-mono text-[10px] font-black uppercase tracking-[0.24em] text-text-dim">Workspace</p>
+						<p class="mt-2 text-sm font-black text-text">Production Admin</p>
+						<div class="mt-3 flex items-center justify-between rounded-xl border border-green/20 bg-green/10 px-3 py-2 text-xs font-bold text-green">
+							<span class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-green"></span>Operational</span>
+							<span class="font-mono">LIVE</span>
+						</div>
+					</div>
+
+					<nav class="flex gap-2 overflow-x-auto lg:flex-col lg:gap-4">
+						{#each navGroups as group}
+							<div class="flex shrink-0 gap-2 lg:flex-col">
+								<p class="hidden px-2 font-mono text-[10px] font-black uppercase tracking-[0.22em] text-text-dim lg:block">{group.label}</p>
+								<div class="flex gap-2 lg:flex-col">
+									{#each group.items as item}
+										{@const active = isActive(item.href)}
+										{@const Icon = item.icon}
+										<a
+											href={item.href}
+											class="group flex shrink-0 items-center gap-3 rounded-2xl border px-3 py-3 text-sm font-semibold transition lg:shrink {active ? 'border-accent/20 bg-accent text-white shadow-lg shadow-accent/15' : 'border-transparent text-text-muted hover:border-border hover:bg-surface hover:text-text hover:shadow-sm'}"
+										>
+											<span class="rounded-xl p-2 {active ? 'bg-white/15 text-white' : 'bg-surface-2 text-text-dim group-hover:text-accent'}">
+												<Icon class="h-4 w-4" />
+											</span>
+											<span class="min-w-0">
+												<span class="block truncate">{item.label}</span>
+												<span class="hidden truncate text-xs font-medium opacity-75 lg:block">{item.description}</span>
+											</span>
+										</a>
+									{/each}
+								</div>
+							</div>
+						{/each}
+					</nav>
+
+					<div class="mt-4 hidden rounded-2xl border border-border bg-surface p-3 shadow-sm lg:block">
+						<p class="px-1 font-mono text-[10px] font-black uppercase tracking-[0.22em] text-text-dim">Ops shortcuts</p>
+						<div class="mt-2 space-y-1">
+							{#each opsQuickLinks as link}
+								{@const active = isActive(link.href)}
+								{@const Icon = link.icon}
+								<a href={link.href} class="flex items-center gap-2 rounded-xl px-2 py-2 text-xs font-bold transition {active ? 'bg-accent/10 text-accent' : 'text-text-muted hover:bg-surface-2 hover:text-text'}">
+									<Icon class="h-3.5 w-3.5" />
+									{link.label}
+								</a>
+							{/each}
+						</div>
 					</div>
 				</div>
+			</aside>
 
-				<nav class="flex gap-2 overflow-x-auto lg:flex-col">
-					{#each nav as item}
-						{@const active = page.url.pathname === item.href}
-						{@const Icon = item.icon}
-						<a
-							href={item.href}
-							class="group flex shrink-0 items-center gap-3 rounded-2xl border px-3 py-3 text-sm font-semibold transition lg:shrink {active ? 'border-accent/20 bg-accent text-white shadow-lg shadow-accent/15' : 'border-transparent text-text-muted hover:border-border hover:bg-surface hover:text-text hover:shadow-sm'}"
-						>
-							<span class="rounded-xl p-2 {active ? 'bg-white/15 text-white' : 'bg-surface-2 text-text-dim group-hover:text-accent'}">
-								<Icon class="h-4 w-4" />
-							</span>
-							<span class="min-w-0">
-								<span class="block truncate">{item.label}</span>
-								<span class="hidden truncate text-xs font-medium opacity-75 lg:block">{item.description}</span>
-							</span>
-						</a>
-					{/each}
-				</nav>
-			</div>
-		</aside>
-
-		<main class="min-w-0 p-4 md:p-6 lg:p-8">
+			<main class="min-w-0 p-4 md:p-6 lg:p-7">
 			{@render children()}
 		</main>
 	</div>
 </div>
+
