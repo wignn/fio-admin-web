@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
 @theme {
@@ -10,36 +10,36 @@
 	--color-text: var(--text-main);
 	--color-text-muted: var(--text-muted);
 	--color-text-dim: var(--text-dim);
-	--color-accent: #2962ff;
-	--color-accent-glow: #1e53e5;
-	--color-green: #089981;
-	--color-red: #f23645;
-	--color-blue: #2962ff;
-	--color-amber: #f59e0b;
-	--font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-	--font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+	--color-accent: #3b82f6;
+	--color-accent-glow: #60a5fa;
+	--color-green: #10b981;
+	--color-red: #fb4661;
+	--color-blue: #3b82f6;
+	--color-amber: #f5b84b;
+	--font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+	--font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
 }
 
 :root {
-	--bg: #f7f9fc;
+	--bg: #eef3f8;
 	--surface: #ffffff;
-	--surface-2: #f0f3fa;
-	--border: #e0e3eb;
-	--border-subtle: #eef1f7;
-	--text-main: #131722;
-	--text-muted: #434651;
-	--text-dim: #787b86;
+	--surface-2: #edf2f8;
+	--border: #d7e0eb;
+	--border-subtle: #e8eef5;
+	--text-main: #101827;
+	--text-muted: #46566c;
+	--text-dim: #7a8798;
 }
 
 :root.dark {
-	--bg: #0f131c;
-	--surface: #171b26;
-	--surface-2: #202636;
-	--border: #2a3142;
-	--border-subtle: #1d2331;
-	--text-main: #eef2f8;
-	--text-muted: #b7becd;
-	--text-dim: #7f8798;
+	--bg: #070a12;
+	--surface: #0d1421;
+	--surface-2: #121b2b;
+	--border: #223047;
+	--border-subtle: #172235;
+	--text-main: #f2f7ff;
+	--text-muted: #b8c5d8;
+	--text-dim: #718099;
 }
 
 * {
@@ -52,13 +52,28 @@ html {
 
 body {
 	margin: 0;
+	min-height: 100vh;
 	background:
-		radial-gradient(circle at top left, rgba(41, 98, 255, 0.08), transparent 32rem),
-		linear-gradient(180deg, var(--color-bg), var(--color-bg));
+		radial-gradient(circle at 8% -5%, rgba(59, 130, 246, 0.22), transparent 28rem),
+		radial-gradient(circle at 82% 8%, rgba(16, 185, 129, 0.13), transparent 22rem),
+		linear-gradient(135deg, var(--color-bg), color-mix(in srgb, var(--color-bg) 82%, #0f172a));
 	color: var(--color-text);
 	font-family: var(--font-sans);
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+	pointer-events: none;
+	position: fixed;
+	inset: 0;
+	z-index: 0;
+	content: '';
+	background-image:
+		linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+		linear-gradient(to bottom, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+	background-size: 48px 48px;
+	mask-image: linear-gradient(to bottom, black, transparent 78%);
 }
 
 button,
@@ -79,13 +94,17 @@ input:focus,
 select:focus,
 button:focus-visible,
 a:focus-visible {
-	outline: 2px solid rgba(41, 98, 255, 0.35);
+	outline: 2px solid rgba(96, 165, 250, 0.55);
 	outline-offset: 2px;
 }
 
+::selection {
+	background: rgba(96, 165, 250, 0.28);
+}
+
 ::-webkit-scrollbar {
-	width: 6px;
-	height: 6px;
+	width: 8px;
+	height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -93,29 +112,29 @@ a:focus-visible {
 }
 
 ::-webkit-scrollbar-thumb {
-	border-radius: 3px;
-	background: var(--color-border);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--color-border) 72%, var(--color-accent));
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	background: var(--color-text-dim);
+	background: var(--color-accent);
 }
 
 @keyframes fade-in {
 	from {
 		opacity: 0;
-		transform: translateY(8px);
+		transform: translateY(10px) scale(0.995);
 	}
 	to {
 		opacity: 1;
-		transform: translateY(0);
+		transform: translateY(0) scale(1);
 	}
 }
 
 @keyframes slide-in-left {
 	from {
 		opacity: 0;
-		transform: translateX(-12px);
+		transform: translateX(-14px);
 	}
 	to {
 		opacity: 1;
@@ -132,12 +151,21 @@ a:focus-visible {
 	}
 }
 
+@keyframes slow-pan {
+	from {
+		transform: translate3d(-2%, -1%, 0) scale(1);
+	}
+	to {
+		transform: translate3d(2%, 1%, 0) scale(1.03);
+	}
+}
+
 .animate-fade-in {
-	animation: fade-in 0.35s ease-out both;
+	animation: fade-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .animate-slide-in {
-	animation: slide-in-left 0.3s ease-out both;
+	animation: slide-in-left 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .font-mono {
@@ -145,20 +173,66 @@ a:focus-visible {
 }
 
 .text-gradient {
-	background: linear-gradient(135deg, var(--color-accent), #7c3aed);
+	background: linear-gradient(135deg, #dbeafe, var(--color-accent-glow) 42%, #34d399);
 	-webkit-background-clip: text;
 	background-clip: text;
 	-webkit-text-fill-color: transparent;
 }
 
 .glass-card {
-	background: color-mix(in srgb, var(--color-surface) 88%, transparent);
-	backdrop-filter: blur(18px);
+	background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+	backdrop-filter: blur(22px) saturate(135%);
 }
 
 .bg-grid {
 	background-image:
-		linear-gradient(to right, color-mix(in srgb, var(--color-border) 58%, transparent) 1px, transparent 1px),
-		linear-gradient(to bottom, color-mix(in srgb, var(--color-border) 58%, transparent) 1px, transparent 1px);
+		linear-gradient(to right, color-mix(in srgb, var(--color-border) 64%, transparent) 1px, transparent 1px),
+		linear-gradient(to bottom, color-mix(in srgb, var(--color-border) 64%, transparent) 1px, transparent 1px);
 	background-size: 3rem 3rem;
+}
+
+.chart-grid {
+	background-image:
+		linear-gradient(to right, color-mix(in srgb, var(--color-border) 48%, transparent) 1px, transparent 1px),
+		linear-gradient(to bottom, color-mix(in srgb, var(--color-border) 42%, transparent) 1px, transparent 1px);
+	background-size: 22px 22px;
+}
+
+.terminal-panel {
+	position: relative;
+	overflow: hidden;
+	border: 1px solid var(--color-border);
+	background:
+		linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 94%, transparent), color-mix(in srgb, var(--color-surface-2) 86%, transparent)),
+		var(--color-surface);
+	box-shadow:
+		0 18px 60px rgba(2, 6, 23, 0.16),
+		inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.terminal-panel::before {
+	pointer-events: none;
+	position: absolute;
+	inset: 0;
+	content: '';
+	background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.08), transparent);
+	transform: translateX(-100%);
+	transition: transform 0.65s ease;
+}
+
+.terminal-panel:hover::before {
+	transform: translateX(100%);
+}
+
+.scanline {
+	position: relative;
+}
+
+.scanline::after {
+	pointer-events: none;
+	position: absolute;
+	inset: 0;
+	content: '';
+	background: repeating-linear-gradient(180deg, transparent 0 7px, rgba(148, 163, 184, 0.035) 8px);
+	mix-blend-mode: overlay;
 }

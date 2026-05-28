@@ -1,6 +1,5 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import { CONTROL_PLANE_URL, CORE_REST_URL } from '$lib/config';
 import { adminSession } from './session.svelte';
 import type { AdminIdentity, ApiErrorBody, PlanId } from './types';
 
@@ -15,18 +14,17 @@ export class AdminApiError extends Error {
 }
 
 interface AdminFetchOptions extends RequestInit {
-	apiKey?: string;
 	skipAuthRedirect?: boolean;
 	timeout?: number;
 	retries?: number;
 }
 
 function urlFor(path: string) {
-	return `${CONTROL_PLANE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+	return `/api/control${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 function coreUrlFor(path: string) {
-	return `${CORE_REST_URL}${path.startsWith('/') ? path : `/${path}`}`;
+	return `/api/core${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 async function parseError(response: Response) {
@@ -66,9 +64,6 @@ async function coreFetch<T>(
 export async function adminFetch<T>(path: string, options: AdminFetchOptions = {}): Promise<T> {
 	const { timeout = 15_000, retries = 1, ...fetchOptions } = options;
 	const headers = new Headers(fetchOptions.headers);
-	const key = fetchOptions.apiKey ?? adminSession.apiKey;
-
-	if (key) headers.set('X-API-Key', key);
 	if (fetchOptions.body && !headers.has('Content-Type'))
 		headers.set('Content-Type', 'application/json');
 
@@ -105,7 +100,7 @@ export async function adminFetch<T>(path: string, options: AdminFetchOptions = {
 
 	if (response.status === 401 || response.status === 403) {
 		if (!fetchOptions.skipAuthRedirect) {
-			adminSession.clear(false);
+			void adminSession.clear(false);
 			void goto(resolve('/login'));
 		}
 		throw new AdminApiError('Admin key is invalid or not authorized.', response.status);
@@ -119,40 +114,38 @@ export async function adminFetch<T>(path: string, options: AdminFetchOptions = {
 	return (await response.json()) as T;
 }
 
-export async function verifyAdminKey(key: string) {
-	const identity = await adminFetch<AdminIdentity>('/api/v1/auth/me', {
-		apiKey: key,
-		skipAuthRedirect: true
-	});
+export async function verifyAdminKey(_key?: string) {
+	const response = await fetch('/api/admin/session');
+	if (!response.ok) {
+		throw new AdminApiError('Admin session is invalid or expired.', response.status);
+	}
+	const identity = (await response.json()) as AdminIdentity;
 	if (identity.role !== 'admin') {
-		throw new AdminApiError('This key is valid but does not have admin access.', 403);
+		throw new AdminApiError('This session does not have admin access.', 403);
 	}
 	return identity;
 }
 
-export async function loginAdmin(key: string) {
-	const trimmed = key.trim();
-	if (!trimmed) throw new AdminApiError('Admin API key is required.', 400);
-	const identity = await verifyAdminKey(trimmed);
-	adminSession.set(trimmed, identity);
+export async function loginAdmin(_key?: string) {
+	const response = await fetch('/api/admin/login', { method: 'POST' });
+	if (!response.ok) {
+		throw new AdminApiError(await parseError(response), response.status);
+	}
+	const identity = (await response.json()) as AdminIdentity;
+	adminSession.set('', identity);
 	return identity;
 }
 
 export async function verifyStoredSession() {
-	adminSession.load();
-	if (!adminSession.apiKey) {
-		adminSession.setReady(true);
-		return false;
-	}
-
 	adminSession.setVerifying(true);
 	try {
-		const identity = await verifyAdminKey(adminSession.apiKey);
+		const identity = await verifyAdminKey();
 		adminSession.setIdentity(identity);
 		adminSession.setReady(true);
 		return true;
 	} catch {
-		adminSession.clear(false);
+		adminSession.setIdentity(null);
+		adminSession.setReady(true);
 		return false;
 	} finally {
 		adminSession.setVerifying(false);
@@ -197,7 +190,6 @@ async function coreAdminFetch<T>(
 	options: RequestInit & { timeout?: number } = {}
 ): Promise<T> {
 	const headers = new Headers(options.headers);
-	if (adminSession.apiKey) headers.set('X-API-Key', adminSession.apiKey);
 	if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 	return coreFetch<T>(path, { ...options, headers });
 }

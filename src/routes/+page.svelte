@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Activity, AlertTriangle, ArrowRight, CheckCircle2, Clock, KeyRound, Server, ShieldCheck, Users, UserCheck, WalletCards } from 'lucide-svelte';
+	import { Activity, AlertTriangle, ArrowRight, Clock, KeyRound, Server, ShieldCheck, Users, UserCheck, WalletCards } from 'lucide-svelte';
 	import { CORE_REST_URL, CONTROL_PLANE_URL } from '$lib/config';
 	import { fetchPlans, fetchStats, fetchUsers } from '$lib/admin/client';
 	import type { AdminStats, AdminUser, HealthStatus, Plan } from '$lib/admin/types';
+	import DonutChart from '$lib/components/DonutChart.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import LoadingBlock from '$lib/components/LoadingBlock.svelte';
+	import MiniBarChart from '$lib/components/MiniBarChart.svelte';
 	import PlanBadge from '$lib/components/PlanBadge.svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
@@ -35,6 +37,20 @@
 	const recentUsers = $derived([...users].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5));
 	const attentionUsers = $derived(users.filter((user) => !user.is_active || !user.email_verified || user.active_keys === 0).slice(0, 6));
 	const healthyServices = $derived(checks.filter((check) => check.status === 'healthy').length);
+	const planChartItems = $derived(
+		plans.map((plan) => ({
+			label: plan.name,
+			value: planCount(plan.id),
+			detail: `${planCount(plan.id)} users`,
+			tone: plan.id === 'enterprise' ? 'green' : plan.id === 'pro' ? 'blue' : plan.id === 'starter' ? 'amber' : 'neutral'
+		}))
+	);
+	const readinessItems = $derived([
+		{ label: 'Active users', value: stats?.active_users ?? 0, detail: `${activationRate}%`, tone: activationRate >= 80 ? 'green' : 'amber' },
+		{ label: 'Verified email', value: verifiedUsers, detail: `${verificationRate}%`, tone: verificationRate >= 80 ? 'green' : 'amber' },
+		{ label: 'API keys', value: stats?.total_api_keys ?? 0, detail: `${stats?.total_api_keys ?? 0}`, tone: 'blue' },
+		{ label: 'Needs follow-up', value: attentionUsers.length, detail: `${attentionUsers.length}`, tone: attentionUsers.length ? 'red' : 'green' }
+	]);
 
 	function formatIdr(value: number) {
 		if (value === 0) return 'Rp0';
@@ -94,24 +110,25 @@
 </script>
 
 <div class="animate-fade-in space-y-5">
-	<div class="relative overflow-hidden rounded-3xl border border-border bg-surface p-5 shadow-sm md:p-6">
-		<div class="absolute inset-0 bg-grid opacity-40"></div>
-		<div class="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-accent/10 blur-3xl"></div>
-		<div class="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+	<div class="terminal-panel scanline relative overflow-hidden rounded-[2rem] p-6 md:p-8">
+		<div class="bg-grid absolute inset-0 opacity-45"></div>
+		<div class="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-accent/20 blur-3xl"></div>
+		<div class="absolute bottom-0 left-1/2 h-40 w-96 -translate-x-1/2 rounded-full bg-green/10 blur-3xl"></div>
+		<div class="relative grid gap-6 lg:grid-cols-[1fr_360px] lg:items-end">
 			<div>
-				<div class="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-xs font-bold text-accent">
+				<div class="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-3 py-1 font-mono text-[11px] font-black uppercase tracking-[0.18em] text-accent">
 					<ShieldCheck class="h-3.5 w-3.5" /> Production command center
 				</div>
-				<h1 class="mt-4 text-3xl font-black tracking-tight text-text md:text-4xl">Admin Dashboard</h1>
-				<p class="mt-3 max-w-2xl text-sm leading-relaxed text-text-muted">Monitor revenue, users, access risk, plan adoption, and service readiness from one clean operational view.</p>
+				<h1 class="mt-5 max-w-4xl text-4xl font-black tracking-[-0.055em] text-text md:text-6xl">Admin intelligence for revenue, access, and runtime risk.</h1>
+				<p class="mt-4 max-w-2xl text-sm leading-7 text-text-muted">Monitor plan adoption, admin-key readiness, service health, and accounts needing action from one operational surface.</p>
 			</div>
-			<div class="flex flex-wrap items-center gap-2">
-				{#if lastLoaded}
-					<span class="rounded-full border border-border bg-surface/80 px-3 py-2 text-xs font-semibold text-text-muted">Updated {lastLoaded.toLocaleTimeString('id-ID')}</span>
-				{/if}
-				<button class="rounded-2xl bg-accent px-4 py-2 text-sm font-bold text-white shadow-lg shadow-accent/20 transition hover:bg-accent-glow disabled:opacity-60" onclick={load} disabled={loading}>
-					{loading ? 'Refreshing...' : 'Refresh data'}
-				</button>
+			<div class="rounded-3xl border border-border bg-surface/75 p-4 shadow-sm backdrop-blur">
+				<p class="font-mono text-[10px] font-black uppercase tracking-[0.22em] text-text-dim">Estimated monthly run-rate</p>
+				<p class="mt-2 text-4xl font-black tracking-tight text-gradient">{formatIdr(monthlyRevenue)}</p>
+				<div class="mt-4 flex flex-wrap items-center gap-2">
+					{#if lastLoaded}<span class="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs font-semibold text-text-muted">Updated {lastLoaded.toLocaleTimeString('id-ID')}</span>{/if}
+					<button class="rounded-full bg-accent px-4 py-1.5 text-xs font-black text-white shadow-lg shadow-accent/20 transition hover:bg-accent-glow disabled:opacity-60" onclick={load} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -129,7 +146,7 @@
 		</div>
 
 		<div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-			<section class="rounded-3xl border border-border bg-surface p-5 shadow-sm">
+			<section class="terminal-panel rounded-3xl p-5">
 				<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 					<div>
 						<h2 class="text-xl font-black text-text">Plan distribution</h2>
@@ -137,31 +154,33 @@
 					</div>
 					<a href="/plans" class="inline-flex items-center gap-1 text-sm font-bold text-accent hover:text-accent-glow">Manage catalog <ArrowRight class="h-4 w-4" /></a>
 				</div>
-				<div class="mt-5 space-y-4">
-					{#each plans as plan}
-						{@const count = planCount(plan.id)}
-						{@const pct = planPct(count)}
-						<div class="rounded-2xl border border-border bg-surface-2/50 p-4">
-							<div class="flex items-center justify-between gap-3">
-								<div class="flex flex-wrap items-center gap-2"><PlanBadge plan={plan.id} /><span class="text-sm font-semibold text-text">{count} users</span></div>
-								<span class="font-mono text-xs font-bold text-text-dim">{pct}% · {formatIdr(plan.price_idr * count)}</span>
+				<div class="mt-5 grid gap-5 lg:grid-cols-[1fr_0.9fr]">
+					<MiniBarChart items={planChartItems} />
+					<div class="space-y-3">
+						{#each plans as plan}
+							{@const count = planCount(plan.id)}
+							{@const pct = planPct(count)}
+							<div class="rounded-2xl border border-border bg-surface-2/50 p-4">
+								<div class="flex items-center justify-between gap-3">
+									<div class="flex flex-wrap items-center gap-2"><PlanBadge plan={plan.id} /><span class="text-sm font-semibold text-text">{count} users</span></div>
+									<span class="font-mono text-xs font-bold text-text-dim">{pct}% · {formatIdr(plan.price_idr * count)}</span>
+								</div>
 							</div>
-							<div class="mt-3 h-2 overflow-hidden rounded-full bg-surface">
-								<div class="h-full rounded-full bg-accent" style={`width: ${pct}%`}></div>
-							</div>
-						</div>
-					{/each}
+						{/each}
+					</div>
 				</div>
 			</section>
 
-			<section class="rounded-3xl border border-border bg-surface p-5 shadow-sm">
+			<section class="terminal-panel rounded-3xl p-5">
 				<h2 class="text-xl font-black text-text">Operational readiness</h2>
 				<p class="mt-1 text-sm text-text-muted">Important signals before scaling usage.</p>
-				<div class="mt-5 space-y-3">
-					<div class="flex items-center justify-between rounded-2xl border border-border bg-surface-2/50 p-4"><span class="flex items-center gap-2 text-sm font-semibold"><UserCheck class="h-4 w-4 text-green" /> Activation rate</span><StatusBadge tone={activationRate >= 80 ? 'green' : 'amber'} label={`${activationRate}%`} /></div>
-					<div class="flex items-center justify-between rounded-2xl border border-border bg-surface-2/50 p-4"><span class="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 class="h-4 w-4 text-green" /> Email verification</span><StatusBadge tone={verificationRate >= 80 ? 'green' : 'amber'} label={`${verificationRate}%`} /></div>
-					<div class="flex items-center justify-between rounded-2xl border border-border bg-surface-2/50 p-4"><span class="flex items-center gap-2 text-sm font-semibold"><AlertTriangle class="h-4 w-4 text-amber" /> Users without keys</span><StatusBadge tone={noKeyUsers === 0 ? 'green' : 'amber'} label={`${noKeyUsers}`} /></div>
-					<div class="flex items-center justify-between rounded-2xl border border-border bg-surface-2/50 p-4"><span class="flex items-center gap-2 text-sm font-semibold"><Activity class="h-4 w-4 text-accent" /> API coverage</span><StatusBadge tone={Number(keysPerActiveUser) > 0 ? 'green' : 'neutral'} label={`${keysPerActiveUser}x`} /></div>
+				<div class="mt-5 grid gap-4">
+					<DonutChart label="Active user base" value={stats.active_users} total={stats.total_users} help={`${inactiveUsers} inactive accounts`} tone={activationRate >= 80 ? 'green' : 'amber'} />
+					<MiniBarChart items={readinessItems} compact />
+					<div class="grid gap-3 sm:grid-cols-2">
+						<div class="flex items-center justify-between rounded-2xl border border-border bg-surface-2/50 p-4"><span class="flex items-center gap-2 text-sm font-semibold"><UserCheck class="h-4 w-4 text-green" /> Activation</span><StatusBadge tone={activationRate >= 80 ? 'green' : 'amber'} label={`${activationRate}%`} /></div>
+						<div class="flex items-center justify-between rounded-2xl border border-border bg-surface-2/50 p-4"><span class="flex items-center gap-2 text-sm font-semibold"><AlertTriangle class="h-4 w-4 text-amber" /> No keys</span><StatusBadge tone={noKeyUsers === 0 ? 'green' : 'amber'} label={`${noKeyUsers}`} /></div>
+					</div>
 				</div>
 			</section>
 		</div>

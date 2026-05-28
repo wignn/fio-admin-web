@@ -26,8 +26,11 @@
 		MarketPriceSnapshot,
 		MarketVolatilitySpike
 	} from '$lib/admin/types';
+	import DonutChart from '$lib/components/DonutChart.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import LoadingBlock from '$lib/components/LoadingBlock.svelte';
+	import MiniBarChart from '$lib/components/MiniBarChart.svelte';
+	import Sparkline from '$lib/components/Sparkline.svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 
@@ -71,6 +74,25 @@
 				spikeRank(a.severity) - spikeRank(b.severity) || Math.abs(b.move_pct) - Math.abs(a.move_pct)
 		)
 	);
+	const feedChartItems = $derived([
+		{ label: 'OK', value: feedOk, detail: `${feedOk}`, tone: 'green' },
+		{ label: 'Attention', value: feedAttention, detail: `${feedAttention}`, tone: feedAttention ? 'red' : 'green' },
+		{ label: 'Pending', value: feeds.filter((feed) => feed.status === 'pending').length, detail: `${feeds.filter((feed) => feed.status === 'pending').length}`, tone: 'amber' }
+	]);
+	const qualityChartItems = $derived([
+		{ label: 'Healthy', value: quality.filter((item) => item.status === 'ok').length, detail: `${quality.filter((item) => item.status === 'ok').length}`, tone: 'green' },
+		{ label: 'Quiet', value: quality.filter((item) => item.status === 'quiet').length, detail: `${quality.filter((item) => item.status === 'quiet').length}`, tone: 'amber' },
+		{ label: 'Stale/flat', value: quality.filter((item) => item.status === 'stale' || item.status === 'flat').length, detail: `${quality.filter((item) => item.status === 'stale' || item.status === 'flat').length}`, tone: 'red' }
+	]);
+	const spikeChartItems = $derived(
+		sortedSpikes.slice(0, 6).map((spike) => ({
+			label: spike.symbol,
+			value: Math.abs(spike.move_pct),
+			detail: formatMove(spike.move_pct),
+			tone: spike.direction === 'up' ? 'green' : 'red'
+		}))
+	);
+	const spikeTrend = $derived(sortedSpikes.slice(0, 12).map((spike) => Math.abs(spike.move_pct)));
 
 	const primarySymbols = ['XAUUSD', 'EURUSD', 'USDJPY', 'DXY', 'SPX', 'BTCUSDT', 'ETHUSDT'];
 
@@ -205,7 +227,7 @@
 
 <div class="animate-fade-in space-y-6">
 	<div
-		class="relative overflow-hidden rounded-3xl border border-border bg-surface p-6 shadow-sm md:p-8"
+		class="terminal-panel scanline relative overflow-hidden rounded-[2rem] p-6 md:p-8"
 	>
 		<div class="bg-grid absolute inset-0 opacity-40"></div>
 		<div class="absolute -top-16 -right-16 h-56 w-56 rounded-full bg-accent/10 blur-3xl"></div>
@@ -248,6 +270,13 @@
 	{:else if error}
 		<EmptyState title="Operations unavailable" description={error} />
 	{:else}
+		<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+			<DonutChart label="Core availability" value={coreHealth?.status === 'healthy' ? 1 : 0} total={1} help={coreHealth?.latency_ms ? `${coreHealth.latency_ms}ms health latency` : 'REST health probe'} tone={coreHealth?.status === 'healthy' ? 'green' : 'red'} />
+			<div class="terminal-panel rounded-3xl p-5"><p class="mb-4 font-mono text-[10px] font-black uppercase tracking-[0.22em] text-text-dim">Feed distribution</p><MiniBarChart items={feedChartItems} compact /></div>
+			<div class="terminal-panel rounded-3xl p-5"><p class="mb-4 font-mono text-[10px] font-black uppercase tracking-[0.22em] text-text-dim">Quality distribution</p><MiniBarChart items={qualityChartItems} compact /></div>
+			<Sparkline values={spikeTrend} positive={true} label="Spike magnitude trend" />
+		</div>
+
 		<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 			<StatCard
 				label="Core health"
@@ -442,8 +471,16 @@
 			</div>
 		</section>
 
-		<section class="rounded-3xl border border-border bg-surface p-5 shadow-sm">
-			<h2 class="text-xl font-black text-text">Volatility Spikes</h2>
+		<section class="terminal-panel rounded-3xl p-5">
+			<div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+				<div>
+					<h2 class="text-xl font-black text-text">Volatility Spikes</h2>
+					<p class="mt-1 text-sm text-text-muted">Largest absolute moves in the current 5m window.</p>
+				</div>
+				<div class="w-full max-w-md rounded-2xl border border-border bg-surface-2/45 p-4">
+					<MiniBarChart items={spikeChartItems} compact />
+				</div>
+			</div>
 			<div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
 				{#each sortedSpikes as spike (`${spike.symbol}-${spike.window}`)}
 					<div class="rounded-2xl border border-border bg-surface-2/45 p-4">
