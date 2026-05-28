@@ -102,7 +102,3 @@ export async function verifyServerKey(key: string) {
 export async function verifySessionKey(event: RequestEvent) {
 	return verifyServerKey(apiKey(event));
 }
-
-export async function verifySessionKey(event: RequestEvent) {
-	return verifyServerKey(apiKey(event));
-}
