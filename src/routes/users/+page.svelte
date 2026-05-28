@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowDownUp, CheckCircle2, KeyRound, RefreshCw, Search, ShieldAlert, UserRoundCheck, Users } from 'lucide-svelte';
-	import { fetchUsers, toggleUser, updateUserPlan } from '$lib/admin/client';
-	import type { AdminUser, PlanId } from '$lib/admin/types';
+	import { ArrowDownUp, CheckCircle2, KeyRound, RefreshCw, Search, ShieldAlert, UserRoundCheck, Users, Wifi } from 'lucide-svelte';
+	import { fetchUserApiKeys, fetchUsers, toggleUser, updateApiKeyLimit, updateUserPlan } from '$lib/admin/client';
+	import type { AdminApiKey, AdminUser, PlanId } from '$lib/admin/types';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import LoadingBlock from '$lib/components/LoadingBlock.svelte';
@@ -25,6 +25,11 @@
 	let pendingPlan = $state('');
 	let confirmPlanOpen = $state(false);
 	let confirmToggleOpen = $state(false);
+	let selectedKeyUser = $state<AdminUser | null>(null);
+	let userKeys = $state<AdminApiKey[]>([]);
+	let keysLoading = $state(false);
+	let keysError = $state('');
+	let savingKey = $state('');
 
 	const filteredUsers = $derived(
 		users
@@ -116,6 +121,39 @@
 		await load();
 	}
 
+	async function openKeys(user: AdminUser) {
+		selectedKeyUser = user;
+		keysLoading = true;
+		keysError = '';
+		try {
+			const data = await fetchUserApiKeys(user.id);
+			userKeys = data.keys;
+		} catch (e) {
+			keysError = e instanceof Error ? e.message : 'Failed to load API keys.';
+		} finally {
+			keysLoading = false;
+		}
+	}
+
+	async function saveKeyLimit(key: AdminApiKey, value: string) {
+		const trimmed = value.trim();
+		const limit = trimmed === '' ? null : Number(trimmed);
+		if (limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > 1000)) {
+			keysError = 'Key WS limit must be blank or between 1 and 1000.';
+			return;
+		}
+		savingKey = key.id;
+		keysError = '';
+		try {
+			await updateApiKeyLimit(key, limit);
+			userKeys = userKeys.map((item) => item.id === key.id ? { ...item, max_ws_connections: limit } : item);
+		} catch (e) {
+			keysError = e instanceof Error ? e.message : 'Failed to update key limit.';
+		} finally {
+			savingKey = '';
+		}
+	}
+
 	onMount(() => {
 		void load();
 	});
@@ -139,6 +177,54 @@
 		<StatCard label="Verified emails" value={verifiedCount} help={`${users.length - verifiedCount} need verification`} icon={CheckCircle2} tone="green" />
 		<StatCard label="API keys" value={totalKeys} help={`${noKeyCount} users without keys`} icon={KeyRound} tone={noKeyCount ? 'amber' : 'blue'} />
 	</div>
+
+	{#if selectedKeyUser}
+		<section class="relative overflow-hidden rounded-3xl border border-accent/20 bg-surface p-5 shadow-xl shadow-accent/5">
+			<div class="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-accent/10 blur-3xl"></div>
+			<div class="relative flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+				<div>
+					<p class="font-mono text-xs font-black uppercase tracking-[0.22em] text-accent">Key connection caps</p>
+					<h2 class="mt-2 text-2xl font-black text-text">{selectedKeyUser.email}</h2>
+					<p class="mt-1 text-sm text-text-muted">Blank follows the plan default; a number overrides only this API key.</p>
+				</div>
+				<button class="rounded-2xl border border-border bg-surface-2 px-3 py-2 text-xs font-bold text-text-muted transition hover:text-text" onclick={() => { selectedKeyUser = null; userKeys = []; }}>Close</button>
+			</div>
+			{#if keysLoading}
+				<div class="relative mt-4"><LoadingBlock label="Loading user API keys..." /></div>
+			{:else if keysError}
+				<p class="relative mt-4 rounded-2xl border border-red/20 bg-red/10 px-4 py-3 text-sm font-bold text-red">{keysError}</p>
+			{:else if userKeys.length === 0}
+				<p class="relative mt-4 rounded-2xl border border-border bg-surface-2 px-4 py-3 text-sm font-bold text-text-muted">No API keys for this user.</p>
+			{:else}
+				<div class="relative mt-4 grid gap-3 lg:grid-cols-2">
+					{#each userKeys as key}
+						<article class="rounded-2xl border border-border bg-bg/70 p-4">
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<p class="truncate font-bold text-text">{key.label}</p>
+									<p class="mt-1 font-mono text-xs text-text-dim">{key.key_prefix}</p>
+								</div>
+								<StatusBadge tone={key.is_active ? 'green' : 'red'} label={key.is_active ? 'Active' : 'Off'} />
+							</div>
+							<label class="mt-4 block">
+								<span class="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-text-dim"><Wifi class="h-3.5 w-3.5 text-accent" /> Max WS connections</span>
+								<input
+									type="number"
+									min="1"
+									max="1000"
+									placeholder="Plan default"
+									value={key.max_ws_connections ?? ''}
+									disabled={savingKey === key.id}
+									onchange={(event) => void saveKeyLimit(key, event.currentTarget.value)}
+									class="mt-2 w-full rounded-xl border border-border bg-surface px-3 py-2 font-mono text-sm font-bold text-text outline-none focus:border-accent"
+								/>
+							</label>
+						</article>
+					{/each}
+				</div>
+			{/if}
+		</section>
+	{/if}
 
 	<div class="rounded-3xl border border-border bg-surface p-4 shadow-sm">
 		<div class="grid gap-3 xl:grid-cols-[1fr_auto_auto]">
@@ -207,7 +293,8 @@
 										<select class="rounded-xl border border-border bg-surface px-2 py-1.5 text-xs font-bold text-text outline-none" value={user.plan} onchange={(e) => askPlanChange(user, e.currentTarget.value)}>
 											{#each planOptions as plan}<option value={plan}>{plan}</option>{/each}
 										</select>
-										<button class="rounded-xl border border-border px-3 py-1.5 text-xs font-bold text-text-muted transition hover:bg-surface-2 hover:text-text" onclick={() => askToggle(user)}>{user.is_active ? 'Deactivate' : 'Activate'}</button>
+										<button class="rounded-xl border border-border px-3 py-1.5 text-xs font-bold text-text-muted transition hover:bg-surface-2 hover:text-text" onclick={() => void openKeys(user)}>Keys</button>
+											<button class="rounded-xl border border-border px-3 py-1.5 text-xs font-bold text-text-muted transition hover:bg-surface-2 hover:text-text" onclick={() => askToggle(user)}>{user.is_active ? 'Deactivate' : 'Activate'}</button>
 									</div>
 								</td>
 							</tr>

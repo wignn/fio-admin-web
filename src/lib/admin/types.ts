@@ -18,6 +18,18 @@ export interface AdminStats {
 	users_by_plan: Record<string, number>;
 }
 
+export interface AdminApiKey {
+	id: string;
+	key_prefix: string;
+	label: string;
+	permissions: string[];
+	max_ws_connections: number | null;
+	is_active: boolean;
+	last_used_at: string | null;
+	expires_at: string | null;
+	created_at: string;
+}
+
 export interface Plan {
 	id: PlanId | string;
 	name: string;

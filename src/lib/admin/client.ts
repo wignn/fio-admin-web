@@ -1,5 +1,6 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
+import { CONTROL_PLANE_URL, CORE_REST_URL } from '$lib/config';
 import { adminSession } from './session.svelte';
 import type { AdminIdentity, ApiErrorBody, PlanId } from './types';
 
@@ -17,14 +18,23 @@ interface AdminFetchOptions extends RequestInit {
 	skipAuthRedirect?: boolean;
 	timeout?: number;
 	retries?: number;
+	apiKey?: string;
+}
+
+function joinUrl(base: string, path: string) {
+	return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
 }
 
 function urlFor(path: string) {
-	return `/api/control${path.startsWith('/') ? path : `/${path}`}`;
+	return joinUrl(CONTROL_PLANE_URL, path);
 }
 
 function coreUrlFor(path: string) {
-	return `/api/core${path.startsWith('/') ? path : `/${path}`}`;
+	return joinUrl(CORE_REST_URL, path);
+}
+
+function attachAdminKey(headers: Headers, key = adminSession.apiKey) {
+	if (key) headers.set('X-API-Key', key);
 }
 
 async function parseError(response: Response) {
@@ -38,14 +48,18 @@ async function parseError(response: Response) {
 
 async function coreFetch<T>(
 	path: string,
-	options: RequestInit & { timeout?: number } = {}
+	options: RequestInit & { timeout?: number; apiKey?: string } = {}
 ): Promise<T> {
-	const { timeout = 12_000, ...fetchOptions } = options;
+	const { timeout = 12_000, apiKey, ...fetchOptions } = options;
+	const headers = new Headers(fetchOptions.headers);
+	attachAdminKey(headers, apiKey);
+	if (fetchOptions.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeout);
 	try {
 		const response = await fetch(coreUrlFor(path), {
 			...fetchOptions,
+			headers,
 			signal: controller.signal
 		});
 		if (!response.ok)
@@ -62,8 +76,9 @@ async function coreFetch<T>(
 }
 
 export async function adminFetch<T>(path: string, options: AdminFetchOptions = {}): Promise<T> {
-	const { timeout = 15_000, retries = 1, ...fetchOptions } = options;
+	const { timeout = 15_000, retries = 1, apiKey, ...fetchOptions } = options;
 	const headers = new Headers(fetchOptions.headers);
+	attachAdminKey(headers, apiKey);
 	if (fetchOptions.body && !headers.has('Content-Type'))
 		headers.set('Content-Type', 'application/json');
 
@@ -114,32 +129,36 @@ export async function adminFetch<T>(path: string, options: AdminFetchOptions = {
 	return (await response.json()) as T;
 }
 
-export async function verifyAdminKey(_key?: string) {
-	const response = await fetch('/api/admin/session');
-	if (!response.ok) {
-		throw new AdminApiError('Admin session is invalid or expired.', response.status);
-	}
-	const identity = (await response.json()) as AdminIdentity;
+export async function verifyAdminKey(key = adminSession.apiKey) {
+	const identity = await adminFetch<AdminIdentity>('/api/v1/auth/me', {
+		apiKey: key,
+		skipAuthRedirect: true,
+		retries: 0
+	});
 	if (identity.role !== 'admin') {
-		throw new AdminApiError('This session does not have admin access.', 403);
+		throw new AdminApiError('This API key does not have admin access.', 403);
 	}
 	return identity;
 }
 
-export async function loginAdmin(_key?: string) {
-	const response = await fetch('/api/admin/login', { method: 'POST' });
-	if (!response.ok) {
-		throw new AdminApiError(await parseError(response), response.status);
-	}
-	const identity = (await response.json()) as AdminIdentity;
-	adminSession.set('', identity);
+export async function loginAdmin(key: string) {
+	const trimmedKey = key.trim();
+	if (!trimmedKey) throw new AdminApiError('Admin API key is required.', 400);
+	const identity = await verifyAdminKey(trimmedKey);
+	adminSession.set(trimmedKey, identity);
 	return identity;
 }
 
 export async function verifyStoredSession() {
+	adminSession.load();
+	if (!adminSession.apiKey) {
+		adminSession.setIdentity(null);
+		adminSession.setReady(true);
+		return false;
+	}
 	adminSession.setVerifying(true);
 	try {
-		const identity = await verifyAdminKey();
+		const identity = await verifyAdminKey(adminSession.apiKey);
 		adminSession.setIdentity(identity);
 		adminSession.setReady(true);
 		return true;
@@ -169,6 +188,29 @@ export function fetchPlans() {
 	return adminFetch<{ plans: import('./types').Plan[] }>('/api/v1/plans');
 }
 
+export function updatePlanWsConnections(planId: string, wsConnections: number) {
+	return adminFetch<{ message: string; plan: string; ws_connections: number }>(
+		`/api/v1/admin/plans/${encodeURIComponent(planId)}/ws-connections`,
+		{
+			method: 'POST',
+			body: JSON.stringify({ ws_connections: wsConnections })
+		}
+	);
+}
+
+export function fetchUserApiKeys(userId: string) {
+	return adminFetch<{ keys: import('./types').AdminApiKey[]; total: number }>(
+		`/api/v1/admin/users/${encodeURIComponent(userId)}/keys`
+	);
+}
+
+export function updateApiKeyLimit(key: import('./types').AdminApiKey, maxWsConnections: number | null) {
+	return adminFetch<{ message: string }>(`/api/v1/keys/${encodeURIComponent(key.id)}`, {
+		method: 'PATCH',
+		body: JSON.stringify({ label: key.label, max_ws_connections: maxWsConnections })
+	});
+}
+
 export function updateUserPlan(userId: string, plan: PlanId | string) {
 	return adminFetch<{ message: string; plan?: string }>(`/api/v1/admin/users/${userId}/plan`, {
 		method: 'POST',
@@ -187,11 +229,9 @@ export function toggleUser(userId: string) {
 
 async function coreAdminFetch<T>(
 	path: string,
-	options: RequestInit & { timeout?: number } = {}
+	options: RequestInit & { timeout?: number; apiKey?: string } = {}
 ): Promise<T> {
-	const headers = new Headers(options.headers);
-	if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-	return coreFetch<T>(path, { ...options, headers });
+	return coreFetch<T>(path, options);
 }
 
 export function fetchCoreHealth() {

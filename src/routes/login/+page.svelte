@@ -4,7 +4,7 @@
 	import { loginAdmin, AdminApiError } from '$lib/admin/client';
 	import { CONTROL_PLANE_URL, CORE_REST_URL, REALTIME_URL } from '$lib/config';
 
-	let confirmAccess = $state(false);
+	let apiKey = $state('');
 	let error = $state('');
 	let loading = $state(false);
 
@@ -12,7 +12,8 @@
 		error = '';
 		loading = true;
 		try {
-			await loginAdmin();
+			await loginAdmin(apiKey);
+			apiKey = '';
 			void goto('/');
 		} catch (e) {
 			error = e instanceof AdminApiError ? e.message : 'Login failed. Please try again.';
@@ -34,7 +35,7 @@
 					<Sparkles class="h-3.5 w-3.5" /> Admin command gate
 				</div>
 				<h1 class="mt-7 text-5xl font-black tracking-[-0.05em] text-text">Operate ATLSD with surgical clarity.</h1>
-				<p class="mt-5 max-w-xl text-sm leading-7 text-text-muted">Revenue, tenants, feeds, market quality, and why-move intelligence sit behind one secure control surface.</p>
+				<p class="mt-5 max-w-xl text-sm leading-7 text-text-muted">Revenue, tenants, feeds, market quality, and why-move intelligence sit behind one control surface.</p>
 				<div class="mt-8 grid gap-3 font-mono text-xs font-bold text-text-muted">
 					<div class="rounded-2xl border border-border bg-surface-2/55 p-3"><span class="text-text-dim">CONTROL</span> · {CONTROL_PLANE_URL}</div>
 					<div class="rounded-2xl border border-border bg-surface-2/55 p-3"><span class="text-text-dim">CORE</span> · {CORE_REST_URL}</div>
@@ -57,25 +58,31 @@
 				<div class="flex items-start gap-3 rounded-2xl border border-border bg-surface-2 px-4 py-4">
 					<LockKeyhole class="mt-0.5 h-4 w-4 text-text-dim" />
 					<div>
-						<p class="font-mono text-xs font-black uppercase tracking-[0.2em] text-text-dim">Private server key</p>
-						<p class="mt-2 text-sm leading-6 text-text-muted">The admin API key is read only on the SvelteKit server from <span class="font-mono font-bold text-text">API_KEY</span>. It is never exposed to browser JavaScript, URLs, localStorage, or sessionStorage.</p>
+						<p class="font-mono text-xs font-black uppercase tracking-[0.2em] text-text-dim">Raw admin API key</p>
+						<p class="mt-2 text-sm leading-6 text-text-muted">Requests go directly from this browser to the control-plane and core API with <span class="font-mono font-bold text-text">X-API-Key</span>. The key is kept in browser sessionStorage until logout.</p>
 					</div>
 				</div>
-				<label class="mt-4 flex items-center gap-3 rounded-2xl border border-border bg-surface/70 px-4 py-3 text-sm font-bold text-text-muted">
-					<input type="checkbox" bind:checked={confirmAccess} class="h-4 w-4" />
-					Use the configured private server credential
+				<label class="mt-4 block rounded-2xl border border-border bg-surface/70 px-4 py-3">
+					<span class="font-mono text-[11px] font-black uppercase tracking-[0.22em] text-text-dim">Admin key</span>
+					<input
+						type="password"
+						bind:value={apiKey}
+						placeholder="Paste admin API key"
+						class="mt-3 w-full rounded-xl border border-border bg-bg px-4 py-3 font-mono text-sm font-bold text-text outline-none transition placeholder:text-text-dim focus:border-accent focus:ring-2 focus:ring-accent/20"
+						autocomplete="current-password"
+					/>
 				</label>
 
 				{#if error}
 					<p class="mt-4 rounded-2xl border border-red/20 bg-red/10 px-4 py-3 text-sm font-bold text-red">{error}</p>
 				{/if}
 
-				<button type="submit" class="mt-6 w-full rounded-2xl bg-accent px-4 py-3 text-sm font-black text-white shadow-xl shadow-accent/20 transition hover:bg-accent-glow disabled:opacity-60" disabled={loading || !confirmAccess}>
-					{loading ? 'Verifying server key...' : 'Enter command center'}
+				<button type="submit" class="mt-6 w-full rounded-2xl bg-accent px-4 py-3 text-sm font-black text-white shadow-xl shadow-accent/20 transition hover:bg-accent-glow disabled:opacity-60" disabled={loading || !apiKey.trim()}>
+					{loading ? 'Verifying admin key...' : 'Enter command center'}
 				</button>
 			</form>
 
-			<p class="mt-4 text-center text-xs text-text-dim lg:text-left">No API key is rendered to the browser; REST calls go through same-origin server routes.</p>
+			<p class="mt-4 text-center text-xs text-text-dim lg:text-left">Raw mode exposes the admin key to this browser session and DevTools network requests.</p>
 		</div>
 	</div>
 </div>
